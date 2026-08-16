@@ -1,9 +1,20 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:qingyun_todo/constants/main.dart';
 import 'package:qingyun_todo/pages/period/index.dart';
 import 'package:qingyun_todo/pages/schedule/index.dart';
 import 'package:qingyun_todo/pages/statistics/index.dart';
 import 'package:qingyun_todo/pages/todo/index.dart';
+
+/// 选中态统一使用的蓝色（iOS Files 风格）
+const Color _kSelectedColor = Color(0xFF007AFF);
+
+/// 底部 Tab 数据模型
+class _TabItem {
+  final String label;
+  final IconData icon;
+
+  const _TabItem({required this.label, required this.icon});
+}
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -14,104 +25,144 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   // 各个页面视图
-  List<Widget> getChildrenList() {
-    return [
-      const TodoView(),
-      const PeriodView(),
-      const ScheduleView(),
-      const StatisticsView(),
-    ];
-  }
+  final List<Widget> _children = const [
+    TodoView(),
+    PeriodView(),
+    ScheduleView(),
+    StatisticsView(),
+  ];
 
   // 导航栏下标位置
   int _currentIndex = 0;
 
-  // 导航栏列表数据
-  final List<Map<String, String>> tabList = MainContants.bottomTabList;
+  // 底部 Tab 列表（iOS 时钟 App 风格：图标 + 中文 label）
+  static const List<_TabItem> _tabList = [
+    _TabItem(label: '待办', icon: Icons.checklist_rounded),
+    _TabItem(label: '周期', icon: Icons.autorenew_rounded),
+    _TabItem(label: '日程', icon: Icons.event_note_rounded),
+    _TabItem(label: '统计', icon: Icons.insights_rounded),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      backgroundColor: Color.fromARGB(255, 235, 235, 235),
-      body: IndexedStack(index: _currentIndex, children: getChildrenList()),
-      bottomNavigationBar: _getBottomNavTabWidget(),
-      // 👇 新增浮动按钮，根据当前索引控制显示
-      floatingActionButton:
-          _currentIndex ==
-              0 // 假设 TodoView 的索引是 0
-          ? FloatingActionButton(
-              shape: CircleBorder(),
-              onPressed: () {
-                // 触发 TodoView 的添加逻辑（后面说明如何通信）
-                _handleAddTodo();
-              },
-              backgroundColor: Colors.deepPurpleAccent,
-              child: const Icon(Icons.add),
-            )
-          : null, // 其他页面不显示
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      backgroundColor: const Color(0xFFF2F2F7),
+      body: IndexedStack(index: _currentIndex, children: _children),
+      bottomNavigationBar: SafeArea(top: false, child: _buildTabBar()),
     );
   }
 
-  // 处理添加待办事件
-  void _handleAddTodo() {
-    // 方式1：通过 GlobalKey 获取 TodoView 状态并调用方法（不推荐）
-    // 方式2：使用状态管理（推荐），下面会展示如何用 ValueNotifier 实现
-  }
-
-  // 底部导航栏
-  Widget _getBottomNavTabWidget() {
-    return Container(
-      // 外边距 & 导航栏底部阴影
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(50),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 16,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+  /// iOS 风格日间胶囊底部导航栏
+  Widget _buildTabBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: ClipRRect(
-        // 圆角
-        borderRadius: BorderRadius.circular(50),
-        child: BottomNavigationBar(
-          showSelectedLabels: false,
-          selectedLabelStyle: TextStyle(
-            fontSize: 12,
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
+        borderRadius: BorderRadius.circular(36),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: Container(
+            height: 66,
+            decoration: BoxDecoration(
+              // 整体白色半透明玻璃背景（日间效果）
+              color: const Color(0xFFFFFFFF).withValues(alpha: 0.75),
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(
+                color: Colors.black.withValues(alpha: 0.06),
+                width: 0.6,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: List.generate(_tabList.length, (index) {
+                final selected = index == _currentIndex;
+                return Expanded(
+                  child: _ClockTabItem(
+                    label: _tabList[index].label,
+                    icon: _tabList[index].icon,
+                    selected: selected,
+                    onTap: () {
+                      setState(() => _currentIndex = index);
+                    },
+                  ),
+                );
+              }),
+            ),
           ),
-          showUnselectedLabels: false,
-          useLegacyColorScheme: false,
-          items: getTabBarWidget(),
-          currentIndex: _currentIndex,
-          elevation: 0,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
         ),
       ),
     );
   }
+}
 
-  // 底部导航栏元素
-  List<BottomNavigationBarItem> getTabBarWidget() {
-    return List.generate(tabList.length, (index) {
-      return BottomNavigationBarItem(
-        icon: Image.asset(tabList[index]['icon']!, width: 33, height: 33),
-        activeIcon: Image.asset(
-          tabList[index]['active_icon']!,
-          width: 33,
-          height: 33,
+/// 单个 Tab 项：仅选中项显示浅色胶囊背景，图标/文字变色；
+/// 未选中项图标与 label 均为白色。
+class _ClockTabItem extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ClockTabItem({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = selected ? _kSelectedColor : const Color(0xFF1C1C1E);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: onTap,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          // ✅ 胶囊背景包裹 icon + 文本整体
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+            decoration: BoxDecoration(
+              // 圆角 = 内容高度的一半，呈现完全圆滑的胶囊形
+              borderRadius: BorderRadius.circular(28),
+              color: selected
+                  ? const Color(0xFF007AFF).withValues(alpha: 0.10)
+                  : Colors.transparent,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 24, color: foreground),
+                const SizedBox(height: 4),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 220),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: foreground,
+                    letterSpacing: 0.2,
+                  ),
+                  child: Text(label),
+                ),
+              ],
+            ),
+          ),
         ),
-        label: tabList[index]['name']!,
-      );
-    });
+      ),
+    );
   }
 }
