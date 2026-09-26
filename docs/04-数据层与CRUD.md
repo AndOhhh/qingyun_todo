@@ -1,6 +1,8 @@
 # 04 · 数据层与 CRUD 方法清单
 
-> **状态**：提案，已对齐 schema v2.1 与 2026-09-25 评审决策（移除子任务、周期删除保留已完成记录、周期支持周/月）。
+> **状态**：**已实施**（提交 `9c74fe6`），对齐 schema v2.2 与 2026-09-25 评审决策。
+> 与本文签名清单的 3 处偏差见 [07 §I.2](./07-开发计划-待办与周期.md)：`completed_count` 改为绝对重算、
+> 新增 `generateCycle`、新增 `periodic_skips` 墓碑表；`StatisticsRepository` 随统计页（Phase 5）再做。
 > 原始需求点名要求"生成 sqlite 的数据表语句，以及需要用到的方法（CRUD）"——表语句见 [02-数据库设计.md](./02-数据库设计.md)，方法清单见本文。
 > 本文给出**签名级**描述（便于评估工作量与接口一致性），落地计划见 [07-开发计划-待办与周期.md](./07-开发计划-待办与周期.md)。
 
@@ -39,8 +41,13 @@ lib/
 │   ├── task_repository.dart
 │   ├── periodic_repository.dart
 │   ├── periodic_item_repository.dart
-│   └── statistics_repository.dart   # 只读聚合查询，供统计页使用
-└── stores/                  # Riverpod provider（db_providers / todo_store / periodic_store），仅调用 repositories，不写 SQL
+│   ├── periodic_generator.dart      # 生成引擎（窗口生成 / 单周期生成 / 生成下一轮）
+│   ├── periodic_completion.dart     # 完成 / 取消完成的轮次联动
+│   ├── cycle_counter.dart           # completed_count 绝对重算
+│   ├── periodic_skips.dart          # 删除墓碑表读写
+│   └── statistics_repository.dart   # 只读聚合查询，供统计页使用（Phase 5，尚未建）
+├── logic/                   # 写操作编排：调 repository → 按失效矩阵 invalidate → UI 反馈
+└── stores/                  # Riverpod provider（db_providers / todo_store / periodic_store / invalidation / bootstrap）
 ```
 
 **约定**：SQL 只允许出现在 `repositories/`；`pages/` 不得 import `db_helper`；写操作后按 [07 §A.1 失效矩阵](./07-开发计划-待办与周期.md) 统一 `ref.invalidate`。周期日期算术集中在 `models/cycle_rule.dart` 与 `utils/date_util.dart`，**不得**用 SQLite 的 `date(x,'+N month')`（月末溢出为进位而非收敛，实测 `2026-01-31 +1 month = 2026-03-03`）。
@@ -109,8 +116,8 @@ lib/
 | 详情 | `Future<PeriodicDetail> queryDetail(int id)` | 聚合：周期 + 周期项（按 `day_offset`）+ 统计（总实例、已完成、完成率、当前轮次进度） |
 | 本轮进度 | `Future<CycleProgress> queryCurrentCycleProgress(int id)` | `(done, total)`，对应 [02 §8.7](./02-数据库设计.md) |
 | 下次提醒 | `Future<Task?> queryNextRemind(int id)` | 对应 [02 §8.8](./02-数据库设计.md)，卡片副标题 |
-| 轮次 +1 | `Future<void> incrementCompletedCount(int id)` | 由 `onInstanceCompleted` 内部调用 |
-| 轮次 −1 | `Future<void> decrementCompletedCount(int id)` | **Q13**：取消完成导致该轮不再完结时回退（不小于 0） |
+| ~~轮次 +1~~ | ~~`incrementCompletedCount(int id)`~~ | **未实现**：改由 `CycleCounter.sync` 绝对重算（幂等，且天然满足 Q13 的回退语义） |
+| ~~轮次 −1~~ | ~~`decrementCompletedCount(int id)`~~ | 同上 |
 | 完成回调 | `Future<void> onInstanceCompleted(Task t)` | 事务内：查该轮未完成数 → 为 0 则 `completed_count += 1` → 生成下一轮 |
 | 取消完成回调 | `Future<void> onInstanceUncompleted(Task t)` | 事务内：若该轮此前已判定完结，则 `completed_count -= 1` |
 | 下一轮次 | `Future<int> nextCycleIndex(int id)` | `MAX(cycle_index) + 1`，无实例时为 0 |
@@ -173,6 +180,9 @@ generatePeriodicInstances(DateTime from, DateTime to)      // 滚动生成，App
 | 要点 | 说明 |
 | :-- | :-- |
 | 幂等 | `INSERT … ON CONFLICT(periodic_item_id, cycle_index) DO NOTHING` + 唯一索引，重复调用无副作用 |
+| **墓碑跳过** | 生成前先取回 `periodic_skips` 中该周期的全部 `(周期项, 轮次)` 键，命中则跳过：硬删除的实例不会被写回（schema v2.2 / docs/02 §4.4）。撤销删除时清除墓碑 |
+| **下一轮生成** | `generateCycle(periodicId, k)` **不受 30 天窗口限制**，否则长周期（每 40 天 / 每月 / 每年）永远等不到下一轮；仍遵守 `is_active`、`end_date`，且不补生成已过去的轮次 |
+| **轮次计数** | `CycleCounter.sync` 绝对重算「拥有 ≥1 条实例且无未完成实例」的轮数，替代 `±1` 增减；一个实现同时满足 TC-08/09/10 |
 | 预生成窗口 | 默认 `今天 → 今天 + 30 天`，常量集中定义 |
 | 触发时机 | ① App 启动（`DbHelper` 就绪后）② 新建/修改周期或周期项后 ③ 完成一轮后生成下一轮 ④ 跨日（定时器或页面 resume 时校验） |
 | 历史实例 | 默认**不补生成**过去日期（Q1） |
