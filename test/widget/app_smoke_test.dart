@@ -72,6 +72,9 @@ void main() {
     // 今日进度口径：今天 2 条（写周报 + 已完成），完成 1 条（修 R5）
     expect(find.text('1/2'), findsOneWidget);
     expect(find.text('50%'), findsOneWidget);
+    // 鼓励文案必须是插值后的结果，不能出现字面量 \${...}
+    expect(find.text('还差 1 项任务，加油'), findsOneWidget);
+    expect(find.textContaining('\${total'), findsNothing);
   });
 
   testWidgets('点击圆圈勾选完成：写库 + 计数变化 + 移入已完成分组', (tester) async {

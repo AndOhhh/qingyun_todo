@@ -115,7 +115,7 @@ class TodayProgress extends StatelessWidget {
   String _hint(double percent) {
     if (total == 0) return '今天还没有安排待办';
     if (percent >= 1.0) return '今日任务全部完成 ✓';
-    return '还差 \${total - done} 项任务，加油';
+    return '还差 ${total - done} 项任务，加油';
   }
 
   /// 渐变进度条（蓝 → 绿）
