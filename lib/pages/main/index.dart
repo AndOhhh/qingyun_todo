@@ -1,9 +1,13 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:qingyun_todo/pages/period/index.dart';
 import 'package:qingyun_todo/pages/schedule/index.dart';
 import 'package:qingyun_todo/pages/statistics/index.dart';
 import 'package:qingyun_todo/pages/todo/index.dart';
+import 'package:qingyun_todo/stores/bootstrap.dart';
 
 /// 选中态统一使用的蓝色（iOS Files 风格）
 const Color _kSelectedColor = Color(0xFF007AFF);
@@ -16,14 +20,15 @@ class _TabItem {
   const _TabItem({required this.label, required this.icon});
 }
 
-class MainPage extends StatefulWidget {
+class MainPage extends ConsumerStatefulWidget {
   const MainPage({super.key});
 
   @override
-  State<MainPage> createState() => _MainPageState();
+  ConsumerState<MainPage> createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage> {
+class _MainPageState extends ConsumerState<MainPage>
+    with WidgetsBindingObserver {
   // 各个页面视图
   final List<Widget> _children = const [
     TodoView(),
@@ -42,6 +47,31 @@ class _MainPageState extends State<MainPage> {
     _TabItem(label: '日程', icon: Icons.event_note_rounded),
     _TabItem(label: '统计', icon: Icons.insights_rounded),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // 触发时机①：App 启动 → 建库 + 滚动生成周期实例（docs/07 C4-2）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) bootstrapApp(ref);
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 触发时机④：跨日校准。
+  /// 用「回到前台 + 日期比对」而不是常驻定时器，避免后台耗电（docs/07 C4-2）。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      recalibrateIfDayChanged(ref);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

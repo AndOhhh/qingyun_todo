@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qingyun_todo/models/cycle_rule.dart';
 import 'package:qingyun_todo/models/periodic.dart';
 import 'package:qingyun_todo/models/periodic_item.dart';
+import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/stores/db_providers.dart';
 
 /// 周期页读数据 provider（docs/07 §A.1）
@@ -30,4 +31,17 @@ final FutureProviderFamily<PeriodicItem?, int> periodicItemProvider =
 final ProviderFamily<List<CyclePreview>, CycleRule> cyclePreviewProvider =
     Provider.family<List<CyclePreview>, CycleRule>(
   (ref, rule) => rule.preview(cycles: 3),
+);
+
+/// 某周期已生成的全部实例（详情页「近期实例」区）
+final FutureProviderFamily<List<Todo>, int> periodicInstancesProvider =
+    FutureProvider.family<List<Todo>, int>(
+  (ref, id) => ref.watch(taskRepositoryProvider).queryByPeriodicId(id),
+);
+
+/// 某周期项已生成的实例条数（C3-5：提示「改模板不影响已生成实例」）
+final FutureProviderFamily<int, int> periodicItemInstanceCountProvider =
+    FutureProvider.family<int, int>(
+  (ref, id) =>
+      ref.watch(periodicItemRepositoryProvider).countGeneratedInstances(id),
 );

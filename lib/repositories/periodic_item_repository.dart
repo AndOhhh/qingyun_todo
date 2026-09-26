@@ -243,6 +243,20 @@ class PeriodicItemRepository {
     });
   }
 
+  /// 该周期项**未来**（含今天）的未完成实例数：三级删除动作表的文案数据
+  Future<int> countFutureInstances(int itemId, {DateTime? fromDate}) async {
+    final db = await _db;
+    final from = DateUtil.formatDate(
+      DateUtil.dateOnly(fromDate ?? DateUtil.today()),
+    );
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM tasks WHERE periodic_item_id = ? '
+      'AND is_completed = 0 AND remind_date >= ?',
+      <Object?>[itemId, from],
+    );
+    return (rows.first['c'] as num?)?.toInt() ?? 0;
+  }
+
   /// 该周期项是否已生成过实例（周期项编辑页提示「改模板不影响已生成实例」，C3-5）
   Future<int> countGeneratedInstances(int itemId) async {
     final db = await _db;

@@ -24,7 +24,7 @@ Future<void> bootstrapApp(WidgetRef ref) async {
     ref.read(lastCalibratedDateProvider.notifier).state =
         DateUtil.formatDate(DateUtil.today());
     if (inserted > 0) {
-      invalidateAfterGenerate(ref);
+      invalidateAfterGenerate(ref.invalidate);
     }
   } catch (error, stack) {
     debugPrint('[bootstrap] 周期实例生成失败，将在下次触发时重试：$error');
