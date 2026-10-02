@@ -213,6 +213,7 @@ void main() {
   });
 
   testWidgets('2a 时间轴：带时间的任务画刻度点，全天任务单独标签', (tester) async {
+    useTallScreen(tester);
     await store.tasks.insert(
       Todo(title: '早会', remindDate: today, remindTime: '09:30'),
     );
@@ -238,6 +239,7 @@ void main() {
   });
 
   testWidgets('3 单周折叠：折叠后只渲染选中日所在周（含跨月补全）', (tester) async {
+    useTallScreen(tester);
     await store.tasks.insert(Todo(title: '今天的事', remindDate: today));
     await pumpApp(tester);
     await gotoSchedule(tester);
@@ -274,6 +276,7 @@ void main() {
   });
 
   testWidgets('4 角标条数：同一天 2 条时显示数字而非圆点', (tester) async {
+    useTallScreen(tester);
     await store.tasks.insert(
       Todo(title: '甲', remindDate: today, remindTime: '08:00'),
     );
@@ -301,6 +304,7 @@ void main() {
   });
 
   testWidgets('5 已完成沉底：未完成在前，已完成排最后', (tester) async {
+    useTallScreen(tester);
     final doneId = await store.tasks.insert(
       Todo(title: '已完成早事', remindDate: today, remindTime: '08:00'),
     );
@@ -321,6 +325,7 @@ void main() {
   });
 
   testWidgets('9 当月概览：本月 N 项 / 已完成 M / 完成率', (tester) async {
+    useTallScreen(tester);
     final doneId = await store.tasks.insert(
       Todo(title: '已完成', remindDate: today),
     );
@@ -338,8 +343,35 @@ void main() {
   });
 
   testWidgets('9 当月概览：空月不渲染', (tester) async {
+    useTallScreen(tester);
     await pumpApp(tester);
     await gotoSchedule(tester);
     expect(find.textContaining('本月'), findsNothing);
+  });
+
+  testWidgets('1 农历/节日/班休：月历小字与角标渲染正确', (tester) async {
+    useTallScreen(tester);
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    // 默认展示当月（10 月）：国庆节小字 + 10/10 的「班」角标
+    expect(find.text('国庆节'), findsOneWidget);
+    expect(find.text('班'), findsOneWidget);
+    // 当日安排头部带农历文案
+    expect(find.textContaining('农历'), findsWidgets);
+
+    // 翻到上月（9 月）：中秋 / 白露 / 教师节 / 纪念日 + 「休」角标
+    await tester.tap(
+      find.descendant(
+        of: find.byType(ScheduleCalendar),
+        matching: find.byIcon(CupertinoIcons.chevron_left),
+      ),
+    );
+    await settle(tester);
+    expect(find.text('中秋节'), findsOneWidget);
+    expect(find.text('白露'), findsOneWidget);
+    expect(find.text('教师节'), findsOneWidget);
+    expect(find.text('抗战胜利纪念日'), findsOneWidget);
+    expect(find.text('休'), findsWidgets);
   });
 }

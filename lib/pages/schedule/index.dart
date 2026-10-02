@@ -13,6 +13,7 @@ import 'package:qingyun_todo/pages/schedule/widgets/schedule_calendar.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/schedule_task_card.dart';
 import 'package:qingyun_todo/stores/schedule_store.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
+import 'package:qingyun_todo/utils/lunar_util.dart';
 
 /// 日程页（FR-16 / FR-17）：月历 + 当日安排。
 ///
@@ -189,7 +190,8 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
                 Text(
                   '${DateUtil.dateLabel(_selected)} · '
                   '${_selected.month}月${_selected.day}日 '
-                  '${DateUtil.weekdayLabel(_selected)}',
+                  '${DateUtil.weekdayLabel(_selected)} · '
+                  '${LunarUtil.info(_selected).lunarFull}',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,

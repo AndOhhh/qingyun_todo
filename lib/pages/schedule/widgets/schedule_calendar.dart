@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:qingyun_todo/models/todo_groups.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
+import 'package:qingyun_todo/utils/lunar_util.dart';
 
 /// 日程页月历：月份头（含周序号与翻页）+ 星期行 + 日期网格（FR-16）。
 ///
@@ -100,7 +101,11 @@ class ScheduleCalendar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: <Widget>[
-          _ArrowButton(icon: CupertinoIcons.chevron_left, onTap: onPrevMonth),
+          _ArrowButton(
+            icon: CupertinoIcons.chevron_left,
+            semanticLabel: '上个月',
+            onTap: onPrevMonth,
+          ),
           const SizedBox(width: 4),
           Text(
             '${month.year}年${month.month}月',
@@ -139,7 +144,11 @@ class ScheduleCalendar extends StatelessWidget {
               ),
             ),
           const SizedBox(width: 4),
-          _ArrowButton(icon: CupertinoIcons.chevron_right, onTap: onNextMonth),
+          _ArrowButton(
+            icon: CupertinoIcons.chevron_right,
+            semanticLabel: '下个月',
+            onTap: onNextMonth,
+          ),
         ],
       ),
     );
@@ -195,43 +204,115 @@ class ScheduleCalendar extends StatelessWidget {
     // 单周视图下跨月日期置灰（参考图折叠态的 30 / 31）
     final isOutsideMonth = weekOnly && day.month != month.month;
 
+    final lunar = LunarUtil.info(day);
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => onDaySelected(day),
       child: SizedBox(
-        height: 52,
+        height: 60,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: isSelected ? _kBlue : Colors.transparent,
-                shape: BoxShape.circle,
-                border: isToday && !isSelected
-                    ? Border.all(color: _kBlue.withValues(alpha: 0.45), width: 1.2)
-                    : null,
+            // 数字圆 + 右上角「班/休」角标（紧贴数字，参考图样式）
+            SizedBox(
+              width: 42,
+              height: 34,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: isSelected ? _kBlue : Colors.transparent,
+                        shape: BoxShape.circle,
+                        border: isToday && !isSelected
+                            ? Border.all(
+                                color: _kBlue.withValues(alpha: 0.45),
+                                width: 1.2,
+                              )
+                            : null,
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            Text(
+                              '${day.day}',
+                              style: TextStyle(
+                                fontSize: 15,
+                                height: 1.1,
+                                fontWeight: isSelected || isToday
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                                color: isSelected
+                                    ? Colors.white
+                                    : isOutsideMonth
+                                        ? _kDim
+                                        : (isToday ? _kBlue : _kText),
+                              ),
+                            ),
+                            // 选中日把农历小字收进实心圆内（参考图），
+                            // 避免白字落在浅色背景上看不见
+                            if (isSelected)
+                              Text(
+                                lunar.subLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                                style: TextStyle(
+                                  fontSize: 7.5,
+                                  height: 1.1,
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (lunar.cornerTag != null)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Text(
+                        lunar.cornerTag!,
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w700,
+                          color: lunar.isWork ? const Color(0xFFFF9500) : _kBlue,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              child: Center(
-                child: Text(
-                  '${day.day}',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight:
-                        isSelected || isToday ? FontWeight.w700 : FontWeight.w600,
-                    color: isSelected
-                        ? Colors.white
-                        : isOutsideMonth
-                            ? _kDim
-                            : (isToday ? _kBlue : _kText),
+            ),
+            if (!isSelected) ...<Widget>[
+              const SizedBox(height: 1),
+              // 农历 / 节日 / 节气小字（参考图日期下方）
+              SizedBox(
+                height: 12,
+                child: Center(
+                  child: Text(
+                    lunar.subLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: TextStyle(
+                      fontSize: 8.5,
+                      height: 1.1,
+                      color: isOutsideMonth
+                          ? _kDim
+                          : lunar.isFestival
+                              ? const Color(0xFF636366)
+                              : const Color(0xFFAEAEB2),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 2),
+            ],
             DayMarkerBadge(
               count: marker == null ? 0 : marker.pending + marker.done,
               color: _markerColor(day, marker),
@@ -297,17 +378,26 @@ class DayMarkerBadge extends StatelessWidget {
 class _ArrowButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
+  final String semanticLabel;
 
-  const _ArrowButton({required this.icon, required this.onTap});
+  const _ArrowButton({
+    required this.icon,
+    required this.onTap,
+    required this.semanticLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        child: Icon(icon, size: 16, color: const Color(0xFF8E8E93)),
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          child: Icon(icon, size: 16, color: const Color(0xFF8E8E93)),
+        ),
       ),
     );
   }
