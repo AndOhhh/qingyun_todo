@@ -7,6 +7,8 @@ import 'package:qingyun_todo/components/swipe_action.dart';
 import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/models/todo_groups.dart';
+import 'package:qingyun_todo/pages/schedule/widgets/day_timeline.dart';
+import 'package:qingyun_todo/pages/schedule/widgets/month_summary.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/schedule_calendar.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/schedule_task_card.dart';
 import 'package:qingyun_todo/stores/schedule_store.dart';
@@ -34,6 +36,9 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
 
   /// 「当日安排」是否折叠（纯 UI 状态，留在 Widget 内）
   bool _dayCollapsed = false;
+
+  /// 月历是否折叠为单周（3，纯 UI 状态）
+  bool _weekOnly = false;
 
   void _selectDay(DateTime day) {
     setState(() {
@@ -100,14 +105,34 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
                   selected: _selected,
                   today: today,
                   markers: markersAsync.valueOrNull ?? const <String, DayMarkers>{},
+                  weekOnly: _weekOnly,
                   onDaySelected: _selectDay,
                   onPrevMonth: () => _shiftMonth(-1),
                   onNextMonth: () => _shiftMonth(1),
+                  onToggleWeekOnly: () =>
+                      setState(() => _weekOnly = !_weekOnly),
+                ),
+              ),
+              // 当月概览（9）：复用月历标记的聚合结果，不新增查询
+              SliverToBoxAdapter(
+                child: MonthSummary(
+                  markers: markersAsync.valueOrNull ?? const <String, DayMarkers>{},
                 ),
               ),
               SliverToBoxAdapter(
                 child: _buildDayHeader(tasksAsync.valueOrNull?.length),
               ),
+              // 当日时间轴（2a）：仅在有安排且未折叠时展示
+              if (!_dayCollapsed)
+                ...tasksAsync.when(
+                  loading: () => <Widget>[],
+                  error: (error, _) => <Widget>[],
+                  data: (tasks) => tasks.isEmpty
+                      ? <Widget>[]
+                      : <Widget>[
+                          SliverToBoxAdapter(child: DayTimeline(tasks: tasks)),
+                        ],
+                ),
               if (!_dayCollapsed)
                 ...tasksAsync.when(
                   loading: () => <Widget>[_skeletonSliver()],

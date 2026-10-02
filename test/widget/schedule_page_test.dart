@@ -2,7 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qingyun_todo/models/todo.dart';
+import 'package:qingyun_todo/pages/schedule/widgets/day_timeline.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/schedule_calendar.dart';
+import 'package:qingyun_todo/pages/schedule/widgets/schedule_task_card.dart';
 import 'package:qingyun_todo/routes/index.dart';
 import 'package:qingyun_todo/stores/db_providers.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
@@ -208,5 +210,136 @@ void main() {
     await tester.tap(find.text('撤销'));
     await settle(tester);
     expect((await store.tasks.queryAll()).single.title, '要删的');
+  });
+
+  testWidgets('2a 时间轴：带时间的任务画刻度点，全天任务单独标签', (tester) async {
+    await store.tasks.insert(
+      Todo(title: '早会', remindDate: today, remindTime: '09:30'),
+    );
+    await store.tasks.insert(
+      Todo(title: '晚课', remindDate: today, remindTime: '20:00'),
+    );
+    await store.tasks.insert(Todo(title: '不限时阅读', remindDate: today));
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    expect(find.byType(DayTimeline), findsOneWidget);
+    // 小时刻度标签在时间轴内部（与月历日期数字区分）
+    for (final hour in const <String>['0', '6', '12', '18', '24']) {
+      expect(
+        find.descendant(
+          of: find.byType(DayTimeline),
+          matching: find.text(hour),
+        ),
+        findsOneWidget,
+      );
+    }
+    expect(find.text('全天 1'), findsOneWidget);
+  });
+
+  testWidgets('3 单周折叠：折叠后只渲染选中日所在周（含跨月补全）', (tester) async {
+    await store.tasks.insert(Todo(title: '今天的事', remindDate: today));
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    // 找一个「同月但不在选中周」的日期
+    final week = DateUtil.weekOf(today);
+    final lastDay = DateUtil.lastDayOfMonth(today).day;
+    var outsideDay = 0;
+    for (var d = 1; d <= lastDay; d++) {
+      final date = DateTime(today.year, today.month, d);
+      if (!week.contains(date)) {
+        outsideDay = d;
+        break;
+      }
+    }
+    expect(outsideDay, isNot(0), reason: '当月应存在不在选中周的日期');
+
+    expect(find.text('$outsideDay'), findsOneWidget);
+    // 折叠
+    await tester.tap(find.byIcon(CupertinoIcons.chevron_up));
+    await settle(tester);
+    expect(find.text('$outsideDay'), findsNothing);
+    // 跨月补全：选中周里属于上个月的日期仍会渲染（置灰）
+    final crossMonth = week.where((d) => d.month != today.month).toList();
+    for (final d in crossMonth) {
+      expect(find.text('${d.day}'), findsOneWidget);
+    }
+    // 选中日与当日安排不受折叠影响
+    expect(find.text('今天的事'), findsOneWidget);
+    // 展开恢复
+    await tester.tap(find.byIcon(CupertinoIcons.chevron_up));
+    await settle(tester);
+    expect(find.text('$outsideDay'), findsOneWidget);
+  });
+
+  testWidgets('4 角标条数：同一天 2 条时显示数字而非圆点', (tester) async {
+    await store.tasks.insert(
+      Todo(title: '甲', remindDate: today, remindTime: '08:00'),
+    );
+    await store.tasks.insert(
+      Todo(title: '乙', remindDate: today, remindTime: '18:00'),
+    );
+    await store.tasks.insert(
+      Todo(title: '丙', remindDate: DateUtil.addDays(today, 2)),
+    );
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is DayMarkerBadge && w.count == 2,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is DayMarkerBadge && w.count == 1,
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('5 已完成沉底：未完成在前，已完成排最后', (tester) async {
+    final doneId = await store.tasks.insert(
+      Todo(title: '已完成早事', remindDate: today, remindTime: '08:00'),
+    );
+    await store.tasks.insert(
+      Todo(title: '未完成晚事', remindDate: today, remindTime: '09:00'),
+    );
+    await store.tasks.toggleComplete(doneId, to: true);
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    final cards = tester
+        .widgetList<ScheduleTaskCard>(find.byType(ScheduleTaskCard))
+        .toList();
+    expect(
+      cards.map((c) => c.task.title).toList(),
+      <String>['未完成晚事', '已完成早事'],
+    );
+  });
+
+  testWidgets('9 当月概览：本月 N 项 / 已完成 M / 完成率', (tester) async {
+    final doneId = await store.tasks.insert(
+      Todo(title: '已完成', remindDate: today),
+    );
+    await store.tasks.insert(Todo(title: '今天', remindDate: today));
+    await store.tasks.insert(
+      Todo(title: '五天后', remindDate: DateUtil.addDays(today, 5)),
+    );
+    await store.tasks.toggleComplete(doneId, to: true);
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    expect(find.textContaining('本月 3 项'), findsOneWidget);
+    expect(find.textContaining('已完成 1'), findsOneWidget);
+    expect(find.text('33%'), findsOneWidget);
+  });
+
+  testWidgets('9 当月概览：空月不渲染', (tester) async {
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+    expect(find.textContaining('本月'), findsNothing);
   });
 }

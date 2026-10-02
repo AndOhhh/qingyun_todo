@@ -18,10 +18,19 @@ final FutureProviderFamily<Map<String, DayMarkers>, String>
       ref.watch(taskRepositoryProvider).queryMonthMarkers(monthKey),
 );
 
-/// 某一天（含常规 + 周期实例）的全部待办，按 提醒时间 → sort_order 排序
+/// 某一天（含常规 + 周期实例）的全部待办。
+///
+/// 排序（5）：未完成在前（提醒时间 → sort_order），**已完成沉底**，
+/// 与待办页「已完成」单独分组的阅读习惯保持一致。
 final FutureProviderFamily<List<Todo>, String> dayTasksProvider =
     FutureProvider.family<List<Todo>, String>(
-  (ref, dateKey) => ref
-      .watch(taskRepositoryProvider)
-      .queryByDate(DateUtil.parseDate(dateKey)),
+  (ref, dateKey) async {
+    final tasks = await ref
+        .watch(taskRepositoryProvider)
+        .queryByDate(DateUtil.parseDate(dateKey));
+    return <Todo>[
+      ...tasks.where((t) => !t.isCompleted),
+      ...tasks.where((t) => t.isCompleted),
+    ];
+  },
 );

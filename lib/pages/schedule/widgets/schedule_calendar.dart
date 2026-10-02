@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:qingyun_todo/models/todo_groups.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
 
-/// 日程页月历：月份头（含周序号与翻页）+ 星期行 + 周日开头的日期网格（FR-16）。
+/// 日程页月历：月份头（含周序号与翻页）+ 星期行 + 日期网格（FR-16）。
 ///
-/// 标记点语义（逾期不入库，按「日期 < 今天」实时派生）：
-/// - 红点：当天有**逾期未完成**
-/// - 蓝点：当天有未完成
-/// - 绿点：当天全部完成
+/// - 支持**月 ↔ 单周折叠**（3）：折叠后只渲染选中日所在周，跨月日期补全并置灰；
+/// - 标记（4）：当天 1 条 → 圆点；>1 条 → 数字角标；颜色语义同下；
+/// - 颜色语义（逾期不入库，按「日期 < 今天」实时派生）：
+///   红 = 有逾期未完成，蓝 = 有未完成，绿 = 全部完成。
 ///
 /// 农历 / 节假日 / 班休标签不在本组件内（见 docs/07 §J 待确认清单）。
 class ScheduleCalendar extends StatelessWidget {
@@ -22,9 +22,13 @@ class ScheduleCalendar extends StatelessWidget {
   /// `{YYYY-MM-DD: DayMarkers}`
   final Map<String, DayMarkers> markers;
 
+  /// 是否折叠为单周视图（3）
+  final bool weekOnly;
+
   final ValueChanged<DateTime> onDaySelected;
   final VoidCallback onPrevMonth;
   final VoidCallback onNextMonth;
+  final VoidCallback onToggleWeekOnly;
 
   const ScheduleCalendar({
     super.key,
@@ -32,9 +36,11 @@ class ScheduleCalendar extends StatelessWidget {
     required this.selected,
     required this.today,
     required this.markers,
+    required this.weekOnly,
     required this.onDaySelected,
     required this.onPrevMonth,
     required this.onNextMonth,
+    required this.onToggleWeekOnly,
   });
 
   static const Color _kBlue = Color(0xFF007AFF);
@@ -42,15 +48,18 @@ class ScheduleCalendar extends StatelessWidget {
   static const Color _kGreen = Color(0xFF34C759);
   static const Color _kText = Color(0xFF1C1C1E);
   static const Color _kMuted = Color(0xFF8E8E93);
+  static const Color _kDim = Color(0xFFC7C7CC);
 
   bool get _isCurrentMonth =>
       month.year == today.year && month.month == today.month;
 
   @override
   Widget build(BuildContext context) {
-    final cells = DateUtil.monthGrid(month);
+    final cells = weekOnly
+        ? DateUtil.weekOf(selected).map<DateTime?>((d) => d).toList()
+        : DateUtil.monthGrid(month);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
       child: Column(
         children: <Widget>[
           _buildHeader(),
@@ -80,6 +89,7 @@ class ScheduleCalendar extends StatelessWidget {
               ],
             ),
           ),
+          _buildWeekToggle(),
         ],
       ),
     );
@@ -152,12 +162,38 @@ class ScheduleCalendar extends StatelessWidget {
     );
   }
 
+  /// 月 ↔ 单周折叠把手（参考图：折叠态在周行下方显示向下箭头）
+  Widget _buildWeekToggle() {
+    return Semantics(
+      button: true,
+      label: weekOnly ? '展开月历' : '折叠为单周',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onToggleWeekOnly,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: AnimatedRotation(
+            turns: weekOnly ? 0.5 : 0,
+            duration: const Duration(milliseconds: 220),
+            child: const Icon(
+              CupertinoIcons.chevron_up,
+              size: 15,
+              color: _kMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCell(DateTime? day) {
     if (day == null) return const SizedBox(height: 52);
     final key = DateUtil.formatDate(day);
     final marker = markers[key];
     final isSelected = DateUtil.dateOnly(day) == DateUtil.dateOnly(selected);
     final isToday = DateUtil.dateOnly(day) == DateUtil.dateOnly(today);
+    // 单周视图下跨月日期置灰（参考图折叠态的 30 / 31）
+    final isOutsideMonth = weekOnly && day.month != month.month;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -188,20 +224,17 @@ class ScheduleCalendar extends StatelessWidget {
                         isSelected || isToday ? FontWeight.w700 : FontWeight.w600,
                     color: isSelected
                         ? Colors.white
-                        : (isToday ? _kBlue : _kText),
+                        : isOutsideMonth
+                            ? _kDim
+                            : (isToday ? _kBlue : _kText),
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 3),
-            // 事件标记点
-            Container(
-              width: 5,
-              height: 5,
-              decoration: BoxDecoration(
-                color: _markerColor(day, marker),
-                shape: BoxShape.circle,
-              ),
+            const SizedBox(height: 2),
+            DayMarkerBadge(
+              count: marker == null ? 0 : marker.pending + marker.done,
+              color: _markerColor(day, marker),
             ),
           ],
         ),
@@ -214,6 +247,49 @@ class ScheduleCalendar extends StatelessWidget {
     if (marker.hasPending && day.isBefore(today)) return _kRed;
     if (marker.hasPending) return _kBlue;
     return _kGreen;
+  }
+}
+
+/// 日期标记（4）：0 条不占位，1 条画圆点，>1 条显示数字角标
+class DayMarkerBadge extends StatelessWidget {
+  final int count;
+  final Color color;
+
+  const DayMarkerBadge({super.key, required this.count, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0 || color == Colors.transparent) {
+      return const SizedBox(width: 14, height: 10);
+    }
+    if (count == 1) {
+      return SizedBox(
+        width: 14,
+        height: 10,
+        child: Center(
+          child: Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+        ),
+      );
+    }
+    return SizedBox(
+      width: 14,
+      height: 10,
+      child: Center(
+        child: Text(
+          '$count',
+          style: TextStyle(
+            fontSize: 9,
+            height: 1,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+      ),
+    );
   }
 }
 
