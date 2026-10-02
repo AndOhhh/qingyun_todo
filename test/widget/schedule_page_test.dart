@@ -65,9 +65,15 @@ void main() {
     await pumpApp(tester);
     await gotoSchedule(tester);
 
-    // 头部：年月 + ISO 周序号
-    expect(find.text('${today.year}年${today.month}月'), findsOneWidget);
-    expect(find.text('第 ${DateUtil.isoWeek(today)} 周'), findsOneWidget);
+    // 标题栏：年月 + ISO 周序号（Text.rich，用 contains 断言）
+    expect(
+      find.textContaining('${today.year}年${today.month}月'),
+      findsWidgets,
+    );
+    expect(
+      find.textContaining('第 ${DateUtil.isoWeek(today)} 周'),
+      findsWidgets,
+    );
     // 周日开头的星期行
     expect(find.text('日'), findsOneWidget);
     expect(find.text('六'), findsOneWidget);
@@ -158,22 +164,27 @@ void main() {
     await gotoSchedule(tester);
 
     final nextMonth = DateUtil.addMonthsCalendar(today, 1);
-    await tester.tap(
-      find.descendant(
-        of: find.byType(ScheduleCalendar),
-        matching: find.byIcon(CupertinoIcons.chevron_right),
-      ),
-    );
+    await tester.tap(find.bySemanticsLabel('下个月'));
     await settle(tester);
-    expect(find.text('${nextMonth.year}年${nextMonth.month}月'), findsOneWidget);
-    expect(find.text('今天'), findsOneWidget, reason: '非当月时头部出现「今天」chip');
+    // 标题栏随翻月联动
+    expect(
+      find.textContaining('${nextMonth.year}年${nextMonth.month}月'),
+      findsWidgets,
+    );
+    expect(
+      find.textContaining('${today.year}年${today.month}月'),
+      findsNothing,
+    );
     // 翻月只改月历，不改选中日：当日安排仍是今天的内容
     expect(find.text('今天的事'), findsOneWidget);
 
     // 「今」悬浮按钮回到今天
     await tester.tap(find.text('今'));
     await settle(tester);
-    expect(find.text('${today.year}年${today.month}月'), findsOneWidget);
+    expect(
+      find.textContaining('${today.year}年${today.month}月'),
+      findsWidgets,
+    );
     expect(find.text('今天的事'), findsOneWidget);
   });
 
@@ -361,12 +372,7 @@ void main() {
     expect(find.textContaining('农历'), findsWidgets);
 
     // 翻到上月（9 月）：中秋 / 白露 / 教师节 / 纪念日 + 「休」角标
-    await tester.tap(
-      find.descendant(
-        of: find.byType(ScheduleCalendar),
-        matching: find.byIcon(CupertinoIcons.chevron_left),
-      ),
-    );
+    await tester.tap(find.bySemanticsLabel('上个月'));
     await settle(tester);
     expect(find.text('中秋节'), findsOneWidget);
     expect(find.text('白露'), findsOneWidget);

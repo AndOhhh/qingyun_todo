@@ -77,12 +77,30 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
             ),
             slivers: <Widget>[
               CupertinoSliverNavigationBar(
+                // 随月份变化强制重建：SliverPersistentHeader 在真机上会缓存
+                // 大标题子组件，仅靠 setState 刷新会出现「网格变了标题没变」
+                key: ValueKey<String>('schedule-nav-${DateUtil.monthKey(_month)}'),
                 backgroundColor: const Color(0xFFF2F2F7),
                 heroTag: 'schedule-large-title',
                 // 去掉大标题导航栏底部的发丝分割线（视觉更干净）
                 border: null,
-                largeTitle:
-                    const Text('日程', style: TextStyle(color: Colors.black)),
+                // 去掉「日程」二字，标题直接展示「年月 + 周序号」，翻月时联动
+                largeTitle: _MonthTitle(month: _month, selected: _selected),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    _NavArrow(
+                      icon: CupertinoIcons.chevron_left,
+                      semanticLabel: '上个月',
+                      onTap: () => _shiftMonth(-1),
+                    ),
+                    _NavArrow(
+                      icon: CupertinoIcons.chevron_right,
+                      semanticLabel: '下个月',
+                      onTap: () => _shiftMonth(1),
+                    ),
+                  ],
+                ),
               ),
               CupertinoSliverRefreshControl(
                 onRefresh: () async {
@@ -149,9 +167,10 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
               const SliverToBoxAdapter(child: SizedBox(height: 150)),
             ],
           ),
-          // 「今」在上、新增在下：新增是更高频的主操作，放在最顺手的角落
+          // 「今」在上、新增在下：新增是更高频的主操作，放在最顺手的角落；
+          // 两个按钮尺寸统一为 56
           Positioned(
-            right: 21,
+            right: 16,
             bottom: 164,
             child: _TodayFab(onTap: _jumpToday),
           ),
@@ -328,31 +347,106 @@ class _TodayFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Center(
-          child: Text(
-            '今',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF007AFF),
+    return Semantics(
+      button: true,
+      label: '回到今天',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          // 与 FloatingAddButton 同尺寸（56）
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Center(
+            child: Text(
+              '今',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF007AFF),
+              ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 标题栏：`2026年10月  第 42 周`。
+///
+/// 周序号取「选中日」（选中日在当前展示月内时），否则取展示月 1 号，
+/// 保证左右滑动翻月时标题整体联动变化。
+class _MonthTitle extends StatelessWidget {
+  final DateTime month;
+  final DateTime selected;
+
+  const _MonthTitle({required this.month, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final inMonth =
+        selected.year == month.year && selected.month == month.month;
+    final anchor = inMonth ? selected : month;
+    return Text.rich(
+      TextSpan(
+        children: <TextSpan>[
+          TextSpan(
+            text: '${month.year}年${month.month}月',
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+              color: Color(0xFF1C1C1E),
+            ),
+          ),
+          TextSpan(
+            text: '  第 ${DateUtil.isoWeek(anchor)} 周',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF8E8E93),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 标题栏右侧的翻月箭头
+class _NavArrow extends StatelessWidget {
+  final IconData icon;
+  final String semanticLabel;
+  final VoidCallback onTap;
+
+  const _NavArrow({
+    required this.icon,
+    required this.semanticLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Icon(icon, size: 17, color: const Color(0xFF8E8E93)),
         ),
       ),
     );

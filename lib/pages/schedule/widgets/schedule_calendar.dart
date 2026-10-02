@@ -27,8 +27,11 @@ class ScheduleCalendar extends StatelessWidget {
   final bool weekOnly;
 
   final ValueChanged<DateTime> onDaySelected;
+
+  /// 横滑翻月手势用（翻页箭头已移入页面标题栏，不再在本组件内渲染）
   final VoidCallback onPrevMonth;
   final VoidCallback onNextMonth;
+
   final VoidCallback onToggleWeekOnly;
 
   const ScheduleCalendar({
@@ -51,9 +54,6 @@ class ScheduleCalendar extends StatelessWidget {
   static const Color _kMuted = Color(0xFF8E8E93);
   static const Color _kDim = Color(0xFFC7C7CC);
 
-  bool get _isCurrentMonth =>
-      month.year == today.year && month.month == today.month;
-
   @override
   Widget build(BuildContext context) {
     final cells = weekOnly
@@ -63,8 +63,6 @@ class ScheduleCalendar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
       child: Column(
         children: <Widget>[
-          _buildHeader(),
-          const SizedBox(height: 10),
           _buildWeekdayRow(),
           const SizedBox(height: 4),
           // 左右滑动翻月
@@ -91,64 +89,6 @@ class ScheduleCalendar extends StatelessWidget {
             ),
           ),
           _buildWeekToggle(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Row(
-        children: <Widget>[
-          _ArrowButton(
-            icon: CupertinoIcons.chevron_left,
-            semanticLabel: '上个月',
-            onTap: onPrevMonth,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${month.year}年${month.month}月',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
-              color: _kText,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '第 ${DateUtil.isoWeek(selected)} 周',
-            style: const TextStyle(fontSize: 12, color: _kMuted),
-          ),
-          const Spacer(),
-          if (!_isCurrentMonth)
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onDaySelected(today),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _kBlue.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  '今天',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _kBlue,
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(width: 4),
-          _ArrowButton(
-            icon: CupertinoIcons.chevron_right,
-            semanticLabel: '下个月',
-            onTap: onNextMonth,
-          ),
         ],
       ),
     );
@@ -368,35 +308,6 @@ class DayMarkerBadge extends StatelessWidget {
             fontWeight: FontWeight.w700,
             color: color,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 月份翻页小箭头
-class _ArrowButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final String semanticLabel;
-
-  const _ArrowButton({
-    required this.icon,
-    required this.onTap,
-    required this.semanticLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-          child: Icon(icon, size: 16, color: const Color(0xFF8E8E93)),
         ),
       ),
     );
