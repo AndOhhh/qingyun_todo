@@ -37,6 +37,8 @@ class PeriodView extends ConsumerWidget {
             backgroundColor: const Color(0xFFF2F2F7),
             // 与待办页区分，避免同一路由子树内 Hero tag 冲突
             heroTag: 'periodic-large-title',
+                // 去掉大标题导航栏底部的发丝分割线（视觉更干净）
+                border: null,
             largeTitle: const Text('周期', style: TextStyle(color: Colors.black)),
           ),
           CupertinoSliverRefreshControl(

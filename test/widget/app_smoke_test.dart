@@ -383,4 +383,24 @@ void main() {
     await settle(tester);
     expect(find.text('新建待办'), findsOneWidget);
   });
+
+  testWidgets('三个 Tab 页的大标题导航栏无底部分割线', (tester) async {
+    await pumpApp(tester);
+
+    bool visibleNavBarHasNoBorder() => tester
+        .widgetList<CupertinoSliverNavigationBar>(
+          find.byType(CupertinoSliverNavigationBar),
+        )
+        .every((bar) => bar.border == null);
+
+    expect(visibleNavBarHasNoBorder(), isTrue, reason: '待办页');
+
+    await tester.tap(find.text('周期').last);
+    await settle(tester);
+    expect(visibleNavBarHasNoBorder(), isTrue, reason: '周期页');
+
+    await tester.tap(find.text('日程').last);
+    await settle(tester);
+    expect(visibleNavBarHasNoBorder(), isTrue, reason: '日程页');
+  });
 }

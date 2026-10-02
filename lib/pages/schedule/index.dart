@@ -79,6 +79,8 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
               CupertinoSliverNavigationBar(
                 backgroundColor: const Color(0xFFF2F2F7),
                 heroTag: 'schedule-large-title',
+                // 去掉大标题导航栏底部的发丝分割线（视觉更干净）
+                border: null,
                 largeTitle:
                     const Text('日程', style: TextStyle(color: Colors.black)),
               ),

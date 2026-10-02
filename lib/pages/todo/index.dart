@@ -52,6 +52,8 @@ class _TodoViewState extends ConsumerState<TodoView> {
             // IndexedStack 会同时持有多个带大标题导航栏的页面，
             // 必须给每页唯一 heroTag，否则路由切换时报「multiple heroes share the same tag」
             heroTag: 'todo-large-title',
+                // 去掉大标题导航栏底部的发丝分割线（视觉更干净）
+                border: null,
             largeTitle: const Text('待办', style: TextStyle(color: Colors.black)),
           ),
           // 下拉刷新：重取分组与今日进度
