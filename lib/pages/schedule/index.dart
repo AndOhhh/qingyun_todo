@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:qingyun_todo/components/error_state.dart';
+import 'package:qingyun_todo/components/floating_add_button.dart';
 import 'package:qingyun_todo/components/swipe_action.dart';
 import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
@@ -80,17 +81,6 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
                 heroTag: 'schedule-large-title',
                 largeTitle:
                     const Text('日程', style: TextStyle(color: Colors.black)),
-                trailing: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  // 从日程页新增：预填当前选中日期
-                  onPressed: () =>
-                      openTodoEdit(context, initialDate: _selected),
-                  child: const Icon(
-                    CupertinoIcons.add_circled,
-                    size: 26,
-                    color: Color(0xFF007AFF),
-                  ),
-                ),
               ),
               CupertinoSliverRefreshControl(
                 onRefresh: () async {
@@ -157,10 +147,19 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
               const SliverToBoxAdapter(child: SizedBox(height: 150)),
             ],
           ),
+          // 「今」在上、新增在下：新增是更高频的主操作，放在最顺手的角落
+          Positioned(
+            right: 21,
+            bottom: 164,
+            child: _TodayFab(onTap: _jumpToday),
+          ),
           Positioned(
             right: 16,
             bottom: 96,
-            child: _TodayFab(onTap: _jumpToday),
+            child: FloatingAddButton(
+              semanticLabel: '新建待办（预填选中日期）',
+              onPressed: () => openTodoEdit(context, initialDate: _selected),
+            ),
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:qingyun_todo/components/empty_state.dart';
 import 'package:qingyun_todo/components/error_state.dart';
+import 'package:qingyun_todo/components/floating_add_button.dart';
 import 'package:qingyun_todo/components/swipe_action.dart';
 import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
@@ -39,7 +40,9 @@ class _TodoViewState extends ConsumerState<TodoView> {
         primaryColor: Color(0xFF007AFF),
         scaffoldBackgroundColor: Color(0xFFF2F2F7),
       ),
-      child: CustomScrollView(
+      child: Stack(
+        children: <Widget>[
+          CustomScrollView(
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
@@ -50,15 +53,6 @@ class _TodoViewState extends ConsumerState<TodoView> {
             // 必须给每页唯一 heroTag，否则路由切换时报「multiple heroes share the same tag」
             heroTag: 'todo-large-title',
             largeTitle: const Text('待办', style: TextStyle(color: Colors.black)),
-            trailing: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => openTodoEdit(context),
-              child: const Icon(
-                CupertinoIcons.add_circled,
-                size: 26,
-                color: Color(0xFF007AFF),
-              ),
-            ),
           ),
           // 下拉刷新：重取分组与今日进度
           CupertinoSliverRefreshControl(
@@ -100,8 +94,19 @@ class _TodoViewState extends ConsumerState<TodoView> {
             ],
             data: _buildSections,
           ),
-          // 底部留白：避让悬浮导航栏
-          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+          // 底部留白：避让悬浮导航栏与浮动按钮
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
+        ],
+      ),
+          // 右下角浮动新增按钮（替代原导航栏右上角 +）
+          Positioned(
+            right: 16,
+            bottom: 96,
+            child: FloatingAddButton(
+              semanticLabel: '新建待办',
+              onPressed: () => openTodoEdit(context),
+            ),
+          ),
         ],
       ),
     );

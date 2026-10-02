@@ -6,6 +6,7 @@ import 'package:qingyun_todo/models/periodic.dart';
 import 'package:qingyun_todo/models/periodic_item.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/pages/todo/index.dart';
+import 'package:qingyun_todo/components/floating_add_button.dart';
 import 'package:qingyun_todo/routes/index.dart';
 import 'package:qingyun_todo/stores/db_providers.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
@@ -205,7 +206,7 @@ void main() {
     useTallScreen(tester);
     await pumpApp(tester);
 
-    await tester.tap(find.byIcon(CupertinoIcons.add_circled));
+    await tester.tap(find.byType(FloatingAddButton));
     await settle(tester);
     expect(find.text('新建待办'), findsOneWidget);
 
@@ -348,5 +349,38 @@ void main() {
     await settle(tester);
     final periodic = (await store.periodics.findById(id))!;
     expect(periodic.completedCount, 1);
+  });
+
+  testWidgets('新增入口统一为右下角浮动按钮：三个页面均生效，导航栏不再有 +', (tester) async {
+    await pumpApp(tester);
+
+    // 导航栏右上角的 add_circled 已移除
+    expect(find.byIcon(CupertinoIcons.add_circled), findsNothing);
+
+    // 待办页：FAB → 新建待办
+    expect(find.byType(FloatingAddButton), findsOneWidget);
+    await tester.tap(find.byType(FloatingAddButton));
+    await settle(tester);
+    expect(find.text('新建待办'), findsOneWidget);
+    await tester.pageBack();
+    await settle(tester);
+
+    // 周期页：FAB → 新建周期
+    await tester.tap(find.text('周期').last);
+    await settle(tester);
+    await tester.tap(find.byType(FloatingAddButton));
+    await settle(tester);
+    expect(find.text('新建周期'), findsOneWidget);
+    await tester.pageBack();
+    await settle(tester);
+
+    // 日程页：FAB 与「今」按钮共存，FAB 打开新建待办（预填选中日期）
+    await tester.tap(find.text('日程').last);
+    await settle(tester);
+    expect(find.text('今'), findsOneWidget);
+    expect(find.byType(FloatingAddButton), findsOneWidget);
+    await tester.tap(find.byType(FloatingAddButton));
+    await settle(tester);
+    expect(find.text('新建待办'), findsOneWidget);
   });
 }

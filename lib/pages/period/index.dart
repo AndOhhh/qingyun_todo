@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:qingyun_todo/components/empty_state.dart';
 import 'package:qingyun_todo/components/error_state.dart';
+import 'package:qingyun_todo/components/floating_add_button.dart';
 import 'package:qingyun_todo/components/swipe_action.dart';
 import 'package:qingyun_todo/logic/periodic_actions.dart';
 import 'package:qingyun_todo/models/periodic.dart';
@@ -25,7 +26,9 @@ class PeriodView extends ConsumerWidget {
         primaryColor: Color(0xFF007AFF),
         scaffoldBackgroundColor: Color(0xFFF2F2F7),
       ),
-      child: CustomScrollView(
+      child: Stack(
+        children: <Widget>[
+          CustomScrollView(
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
@@ -35,15 +38,6 @@ class PeriodView extends ConsumerWidget {
             // 与待办页区分，避免同一路由子树内 Hero tag 冲突
             heroTag: 'periodic-large-title',
             largeTitle: const Text('周期', style: TextStyle(color: Colors.black)),
-            trailing: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => openPeriodicEdit(context),
-              child: const Icon(
-                CupertinoIcons.add_circled,
-                size: 26,
-                color: Color(0xFF007AFF),
-              ),
-            ),
           ),
           CupertinoSliverRefreshControl(
             onRefresh: () async {
@@ -72,7 +66,17 @@ class PeriodView extends ConsumerWidget {
                 ? <Widget>[_emptySliver(context)]
                 : <Widget>[_listSliver(context, ref, entries)],
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
+        ],
+      ),
+          Positioned(
+            right: 16,
+            bottom: 96,
+            child: FloatingAddButton(
+              semanticLabel: '新建周期',
+              onPressed: () => openPeriodicEdit(context),
+            ),
+          ),
         ],
       ),
     );
