@@ -239,6 +239,46 @@ void main() {
     });
   });
 
+  group('日程页月历标记（FR-16）', () {
+    test('queryMonthMarkers 按月聚合 未完成 / 已完成，跨月不串', () async {
+      final today = DateUtil.today();
+      final thisMonth = DateUtil.monthKey(today);
+      await tasks.insert(buildTask(title: '今天未完成', remindDate: today));
+      await tasks.insert(
+        buildTask(title: '今天已完成', remindDate: today, completed: true),
+      );
+      await tasks.insert(
+        buildTask(
+          title: '下月',
+          remindDate: DateUtil.addMonthsCalendar(today, 1),
+        ),
+      );
+
+      final markers = await tasks.queryMonthMarkers(thisMonth);
+      final todayKey = DateUtil.formatDate(today);
+      expect(markers[todayKey], isNotNull);
+      expect(markers[todayKey]!.pending, 1);
+      expect(markers[todayKey]!.done, 1);
+      expect(markers[todayKey]!.hasPending, isTrue);
+      expect(markers[todayKey]!.allDone, isFalse);
+      // 下月的数据不落在本月结果里
+      expect(markers.length, 1);
+
+      final allDone = await tasks.queryMonthMarkers(
+        DateUtil.monthKey(DateUtil.addMonthsCalendar(today, 1)),
+      );
+      expect(allDone.values.single.allDone, isFalse);
+      expect(allDone.values.single.pending, 1);
+    });
+
+    test('空月返回空 Map', () async {
+      expect(
+        await tasks.queryMonthMarkers('2000-01'),
+        isEmpty,
+      );
+    });
+  });
+
   group('其他查询', () {
     test('queryByDate / queryOverdue / queryOrphanPeriodic', () async {
       final today = DateUtil.today();

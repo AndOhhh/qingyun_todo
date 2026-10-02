@@ -259,6 +259,31 @@ class TaskRepository {
     return rows.map(Todo.fromMap).toList(growable: false);
   }
 
+  /// 日程页月历标记：按月聚合每天的 未完成 / 已完成 条数（FR-16）。
+  ///
+  /// [monthKey] 形如 `YYYY-MM`；逾期不入库，颜色由 UI 按「日期 < 今天」派生。
+  Future<Map<String, DayMarkers>> queryMonthMarkers(String monthKey) async {
+    final db = await _db;
+    final rows = await db.rawQuery(
+      '''
+      SELECT remind_date,
+             COALESCE(SUM(CASE WHEN is_completed = 0 THEN 1 ELSE 0 END), 0) AS pending,
+             COALESCE(SUM(is_completed), 0) AS done
+      FROM tasks
+      WHERE remind_date >= ? AND remind_date <= ?
+      GROUP BY remind_date
+      ''',
+      <Object?>['$monthKey-01', '$monthKey-31'],
+    );
+    return <String, DayMarkers>{
+      for (final row in rows)
+        row['remind_date'] as String: DayMarkers(
+          pending: (row['pending'] as num?)?.toInt() ?? 0,
+          done: (row['done'] as num?)?.toInt() ?? 0,
+        ),
+    };
+  }
+
   /// 逾期任务：`is_completed = 0 AND remind_date < today`（docs/02 §8.4）
   Future<List<Todo>> queryOverdue() async {
     final db = await _db;

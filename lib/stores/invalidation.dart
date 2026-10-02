@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:qingyun_todo/stores/periodic_store.dart';
+import 'package:qingyun_todo/stores/schedule_store.dart';
 import 'package:qingyun_todo/stores/todo_store.dart';
 
 /// 失效函数签名。
@@ -24,6 +25,8 @@ void invalidateAfterTaskWrite(InvalidateFn invalidate, {int? periodicId}) {
   invalidate(todoGroupsProvider);
   invalidate(todayProgressProvider);
   invalidate(todoDetailProvider);
+  invalidate(monthMarkersProvider);
+  invalidate(dayTasksProvider);
   if (periodicId != null) {
     invalidate(periodicListProvider);
     invalidate(periodicDetailProvider(periodicId));
@@ -38,6 +41,8 @@ void invalidateAfterPeriodicWrite(InvalidateFn invalidate) {
   invalidate(periodicItemProvider);
   invalidate(periodicInstancesProvider);
   invalidate(periodicItemInstanceCountProvider);
+  invalidate(monthMarkersProvider);
+  invalidate(dayTasksProvider);
   invalidate(todoGroupsProvider);
   invalidate(todayProgressProvider);
   invalidate(todoDetailProvider);
@@ -49,4 +54,6 @@ void invalidateAfterGenerate(InvalidateFn invalidate) {
   invalidate(todayProgressProvider);
   invalidate(periodicInstancesProvider);
   invalidate(periodicListProvider);
+  invalidate(monthMarkersProvider);
+  invalidate(dayTasksProvider);
 }

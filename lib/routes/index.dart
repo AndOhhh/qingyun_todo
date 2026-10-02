@@ -7,6 +7,7 @@ import 'package:qingyun_todo/pages/period/detail/index.dart';
 import 'package:qingyun_todo/pages/period/edit/index.dart';
 import 'package:qingyun_todo/pages/period/item_edit/index.dart';
 import 'package:qingyun_todo/pages/todo/edit/index.dart';
+import 'package:qingyun_todo/utils/date_util.dart';
 
 /// 应用根 Widget（`ProviderScope` 在 `main.dart` 中包裹）
 Widget getRootWidget() {
@@ -29,7 +30,13 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     case RouteConstants.mainPath:
       page = const MainPage();
     case RouteConstants.todoEdit:
-      page = TodoEditPage(taskId: idOf('id'));
+      final dateRaw = query['date'];
+      page = TodoEditPage(
+        taskId: idOf('id'),
+        initialDate: (dateRaw == null || dateRaw.isEmpty)
+            ? null
+            : DateUtil.parseDate(dateRaw),
+      );
     case RouteConstants.periodicEdit:
       page = PeriodicEditPage(periodicId: idOf('id'));
     case RouteConstants.periodicDetail:

@@ -1,3 +1,5 @@
+import 'package:qingyun_todo/utils/date_util.dart';
+
 /// 命名路由常量（修 R2：原类名 `RouteContants` 拼写错误）。
 ///
 /// 带参路由统一用 query 传递，如 `/todo/edit?id=3`（docs/07 B2-2）。
@@ -22,7 +24,14 @@ class RouteConstants {
   static String _withId(String path, int? id) =>
       id == null ? path : '$path?id=$id';
 
-  static String todoEditPath({int? id}) => _withId(todoEdit, id);
+  /// 待办编辑页路径；[date] 用于从日程页新增时预填提醒日期
+  static String todoEditPath({int? id, DateTime? date}) {
+    var path = _withId(todoEdit, id);
+    if (date != null) {
+      path += '${id == null ? '?' : '&'}date=${DateUtil.formatDate(date)}';
+    }
+    return path;
+  }
 
   static String periodicEditPath({int? id}) => _withId(periodicEdit, id);
 

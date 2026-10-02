@@ -188,3 +188,23 @@ class TodayProgressData {
 
   bool get allDone => total > 0 && done >= total;
 }
+
+/// 日程页：某一天在月历上的标记数据（docs/01 FR-16）
+class DayMarkers {
+  /// 未完成条数
+  final int pending;
+
+  /// 已完成条数
+  final int done;
+
+  const DayMarkers({required this.pending, required this.done});
+
+  static const DayMarkers empty = DayMarkers(pending: 0, done: 0);
+
+  bool get isEmpty => pending == 0 && done == 0;
+
+  /// 该日是否仍有未完成（含逾期，逾期由调用方按日期与今天比较判定颜色）
+  bool get hasPending => pending > 0;
+
+  bool get allDone => pending == 0 && done > 0;
+}

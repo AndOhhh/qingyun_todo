@@ -27,7 +27,10 @@ import 'package:qingyun_todo/utils/date_util.dart';
 class TodoEditPage extends ConsumerStatefulWidget {
   final int? taskId;
 
-  const TodoEditPage({super.key, this.taskId});
+  /// 新增态的默认提醒日期（日程页「+」会带上选中日期）
+  final DateTime? initialDate;
+
+  const TodoEditPage({super.key, this.taskId, this.initialDate});
 
   @override
   ConsumerState<TodoEditPage> createState() => _TodoEditPageState();
@@ -37,7 +40,9 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _remarkController = TextEditingController();
 
-  DateTime _remindDate = DateUtil.today();
+  // `late`：字段初始化时 widget 尚未挂载，首次访问（initState 之后）才取值
+  late DateTime _remindDate =
+      DateUtil.dateOnly(widget.initialDate ?? DateUtil.today());
   String? _remindTime;
   TodoPriority _priority = TodoPriority.none;
   String? _accentColorHex;

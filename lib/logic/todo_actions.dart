@@ -25,10 +25,15 @@ import 'package:qingyun_todo/utils/date_util.dart';
 /// | 数据 | 保留，写 completed_at | 物理移除 |
 /// | 统计 | 计入分母与分子 | 从分母与分子同时消失 |
 
-/// 打开待办编辑页；[taskId] 为空表示新增
-Future<void> openTodoEdit(BuildContext context, {int? taskId}) {
+/// 打开待办编辑页；[taskId] 为空表示新增；
+/// [initialDate] 用于从日程页新增时预填提醒日期（首页调用不传）
+Future<void> openTodoEdit(
+  BuildContext context, {
+  int? taskId,
+  DateTime? initialDate,
+}) {
   return Navigator.of(context).pushNamed(
-    RouteConstants.todoEditPath(id: taskId),
+    RouteConstants.todoEditPath(id: taskId, date: initialDate),
   );
 }
 

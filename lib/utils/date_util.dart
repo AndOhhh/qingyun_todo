@@ -119,6 +119,51 @@ class DateUtil {
     return names[(d.weekday - 1) % 7];
   }
 
+  /// 月份键 `YYYY-MM`（日程页按月查询标记用）
+  static String monthKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${_two(d.month)}';
+
+  /// 当月第一天（date-only）
+  static DateTime firstDayOfMonth(DateTime d) => DateTime(d.year, d.month, 1);
+
+  /// 当月最后一天（date-only）
+  static DateTime lastDayOfMonth(DateTime d) => DateTime(d.year, d.month + 1, 0);
+
+  /// 加减月份（仅取月份粒度，用于日历翻页）
+  static DateTime addMonthsCalendar(DateTime d, int months) =>
+      DateTime(d.year, d.month + months, 1);
+
+  /// ISO 8601 周序号（参考图头部的「第 N 周」）：第 1 周包含当年第一个周四
+  static int isoWeek(DateTime d) {
+    final date = dateOnly(d);
+    final thursday = addDays(date, 4 - date.weekday);
+    final jan1 = DateTime(thursday.year, 1, 1);
+    return (thursday.difference(jan1).inDays / 7).floor() + 1;
+  }
+
+  /// 月历网格（**周日开头**，与参考图一致）：
+  /// 返回若干完整周，月首/月末之外的位置为 null。
+  static List<DateTime?> monthGrid(DateTime month) {
+    final first = firstDayOfMonth(month);
+    final last = lastDayOfMonth(month);
+    final leading = first.weekday % 7; // 周日=0 … 周六=6
+    final cells = <DateTime?>[
+      for (var i = 0; i < leading; i++) null,
+      for (var d = first; !d.isAfter(last); d = addDays(d, 1)) d,
+    ];
+    while (cells.length % 7 != 0) {
+      cells.add(null);
+    }
+    return cells;
+  }
+
+  /// 选中日所在周（周日开头，**跨月补全**，参考图折叠态用）
+  static List<DateTime> weekOf(DateTime day) {
+    final d = dateOnly(day);
+    final start = addDays(d, -(d.weekday % 7));
+    return List<DateTime>.generate(7, (i) => addDays(start, i));
+  }
+
   /// 中文日期：`2026年9月25日`
   static String humanDate(DateTime d) => '${d.year}年${d.month}月${d.day}日';
 }

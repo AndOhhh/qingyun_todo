@@ -5,6 +5,7 @@ import 'package:qingyun_todo/models/interval_type.dart';
 import 'package:qingyun_todo/models/periodic.dart';
 import 'package:qingyun_todo/models/periodic_item.dart';
 import 'package:qingyun_todo/models/todo.dart';
+import 'package:qingyun_todo/pages/todo/index.dart';
 import 'package:qingyun_todo/routes/index.dart';
 import 'package:qingyun_todo/stores/db_providers.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
@@ -23,6 +24,22 @@ void main() {
   tearDown(() async => store.dispose());
 
   /// 收敛动画；给一个短超时，避免某个组件无限动画时把测试挂死
+  /// `IndexedStack` 会同时构建待办页与日程页，同一条待办会在两处渲染，
+  /// 因此涉及卡片标题 / 勾选圈的断言必须限定到具体页面。
+  Finder inTodo(Finder finder) =>
+      find.descendant(of: find.byType(TodoView), matching: finder);
+
+
+  /// 日程页 = 月历 + 当日列表，内容较长；默认 800x600 测试视口会让当日卡片
+  /// 落到悬浮导航栏下方 / 视口外（懒加载不构建、点击被导航栏拦截）。
+  /// 统一用高屏跑 Widget 测试。
+  void useTallScreen(WidgetTester tester) {
+    tester.view.physicalSize = const Size(1100, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  }
+
   Future<void> settle(WidgetTester tester) => tester.pumpAndSettle(
         const Duration(milliseconds: 50),
         EnginePhase.sendSemanticsUpdate,
@@ -42,6 +59,7 @@ void main() {
   }
 
   testWidgets('待办页按数据库数据渲染五组分组，且已完成默认折叠（Q10）', (tester) async {
+    useTallScreen(tester);
     final today = DateUtil.today();
     await store.tasks.insert(Todo(title: '写周报', remindDate: today));
     await store.tasks.insert(
@@ -64,10 +82,12 @@ void main() {
     expect(find.text('已完成 · 1'), findsOneWidget);
     expect(find.text('后续 · 1'), findsNothing);
 
-    expect(find.text('写周报'), findsOneWidget);
-    expect(find.text('交房租'), findsOneWidget);
-    // 已完成分组默认折叠 → 折叠内容不可见
-    expect(find.text('给爸妈打电话'), findsNothing);
+    expect(inTodo(find.text('写周报')), findsOneWidget);
+    expect(inTodo(find.text('交房租')), findsOneWidget);
+    // 已完成分组默认折叠 → 折叠内容不可见。
+    // 注：IndexedStack 的非选中页被 Visibility(maintainState) 包裹且处于 offstage，
+    // 默认 finder 会跳过，因此这里无需（也无法）断言日程页的内容。
+    expect(inTodo(find.text('给爸妈打电话')), findsNothing);
 
     // 今日进度口径：今天 2 条（写周报 + 已完成），完成 1 条（修 R5）
     expect(find.text('1/2'), findsOneWidget);
@@ -78,11 +98,12 @@ void main() {
   });
 
   testWidgets('点击圆圈勾选完成：写库 + 计数变化 + 移入已完成分组', (tester) async {
+    useTallScreen(tester);
     await store.tasks.insert(Todo(title: '写周报', remindDate: DateUtil.today()));
     await pumpApp(tester);
 
     expect(find.text('已完成 · 1'), findsNothing);
-    await tester.tap(find.byIcon(CupertinoIcons.circle));
+    await tester.tap(inTodo(find.byIcon(CupertinoIcons.circle)));
     await settle(tester);
 
     // 数据库里真的写进去了（不是内存 setState）
@@ -99,19 +120,21 @@ void main() {
   });
 
   testWidgets('展开「已完成」分组后可见已完成条目', (tester) async {
+    useTallScreen(tester);
     final id = await store.tasks.insert(
       Todo(title: '给爸妈打电话', remindDate: DateUtil.today()),
     );
     await store.tasks.toggleComplete(id, to: true);
     await pumpApp(tester);
 
-    expect(find.text('给爸妈打电话'), findsNothing);
+    expect(inTodo(find.text('给爸妈打电话')), findsNothing);
     await tester.tap(find.text('已完成 · 1'));
     await settle(tester);
     expect(find.text('给爸妈打电话'), findsOneWidget);
   });
 
   testWidgets('空库显示空态引导，没有残留 mock 数据', (tester) async {
+    useTallScreen(tester);
     await pumpApp(tester);
     expect(find.text('全部搞定！'), findsOneWidget);
     // 旧 mock 里的 6 条数据必须彻底消失
@@ -126,6 +149,7 @@ void main() {
   });
 
   testWidgets('周期页渲染数据库中的周期卡片与实例进度', (tester) async {
+    useTallScreen(tester);
     await store.periodics.insert(
       Periodic(
         name: '隔天喝饮品计划',
@@ -150,6 +174,7 @@ void main() {
   });
 
   testWidgets('启动时自动生成周期实例，并出现在待办页（FR-13 / D5）', (tester) async {
+    useTallScreen(tester);
     await store.periodics.insert(
       Periodic(
         name: '每天喝水',
@@ -177,6 +202,7 @@ void main() {
   });
 
   testWidgets('新增待办闭环：+ → 表单 → 保存 → 落库并出现在列表（FR-02）', (tester) async {
+    useTallScreen(tester);
     await pumpApp(tester);
 
     await tester.tap(find.byIcon(CupertinoIcons.add_circled));
@@ -197,7 +223,7 @@ void main() {
     await settle(tester);
 
     // 已返回列表，并且数据库里真的写进去了
-    expect(find.text('买牛奶'), findsOneWidget);
+    expect(inTodo(find.text('买牛奶')), findsOneWidget);
     final all = await store.tasks.queryAll();
     expect(all, hasLength(1));
     expect(all.single.title, '买牛奶');
@@ -206,13 +232,14 @@ void main() {
   });
 
   testWidgets('左滑露出红色垃圾桶 → 二次确认 → 硬删除 → 5 秒内可撤销（Q5 / B3）', (tester) async {
+    useTallScreen(tester);
     await store.tasks.insert(
       Todo(title: '要删的待办', remindDate: DateUtil.today()),
     );
     await pumpApp(tester);
 
     // 左滑：露出动作按钮，但不会滑走即删
-    await tester.drag(find.text('要删的待办'), const Offset(-200, 0));
+    await tester.drag(inTodo(find.text('要删的待办')), const Offset(-200, 0));
     await settle(tester);
     expect(find.text('删除'), findsOneWidget);
     expect(await store.tasks.queryAll(), hasLength(1), reason: '仅滑动不应删除');
@@ -228,7 +255,7 @@ void main() {
 
     // 物理删除：记录与统计分母同时消失
     expect(await store.tasks.queryAll(), isEmpty);
-    expect(find.text('要删的待办'), findsNothing);
+    expect(inTodo(find.text('要删的待办')), findsNothing);
 
     // SnackBar 撤销（B3-2）：按原 id / 原字段恢复
     expect(find.text('撤销'), findsOneWidget);
@@ -237,10 +264,11 @@ void main() {
     final restored = await store.tasks.queryAll();
     expect(restored, hasLength(1));
     expect(restored.single.title, '要删的待办');
-    expect(find.text('要删的待办'), findsOneWidget);
+    expect(inTodo(find.text('要删的待办')), findsOneWidget);
   });
 
   testWidgets('新建周期闭环：预设「每 2 天」→ 保存 → 详情页按天分组（FR-11 / C1~C3）', (tester) async {
+    useTallScreen(tester);
     await pumpApp(tester);
     await tester.tap(find.text('周期'));
     await settle(tester);
@@ -272,6 +300,7 @@ void main() {
   });
 
   testWidgets('跨模块闭环（M5 / D4）：加周期项 → 生成实例 → 待办页勾选完成 → 轮次计数 +1', (tester) async {
+    useTallScreen(tester);
     final id = await store.periodics.insert(
       Periodic(name: '每天喝水', startDate: DateUtil.today()),
     );
