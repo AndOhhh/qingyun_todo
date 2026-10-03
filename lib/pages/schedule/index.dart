@@ -110,7 +110,9 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: _pickMonth,
-                        child: Center(
+                        // 标题靠左上展示（不再居中）
+                        child: Align(
+                          alignment: Alignment.centerLeft,
                           child: _MonthTitle(
                             month: _month,
                             selected: _selected,

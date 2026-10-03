@@ -138,6 +138,9 @@ void main() {
     useTallScreen(tester);
     await pumpApp(tester);
     expect(find.text('全部搞定！'), findsOneWidget);
+    // 空态不再提供居中新建按钮，引导点击右下角 FAB
+    expect(find.text('新建待办'), findsNothing);
+    expect(find.textContaining('点击右下角'), findsOneWidget);
     // 旧 mock 里的 6 条数据必须彻底消失
     expect(find.text('计算机证书考试'), findsNothing);
     expect(find.text('晨跑 5 公里'), findsNothing);

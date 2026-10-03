@@ -121,15 +121,12 @@ class _TodoViewState extends ConsumerState<TodoView> {
           hasScrollBody: false,
           child: Padding(
             padding: const EdgeInsets.only(bottom: 100),
+            // 与周期页空态一致：不放居中新建按钮（与右下角 FAB 重复），只给引导文案
             child: EmptyState(
               icon: CupertinoIcons.checkmark_seal_fill,
               title: '全部搞定！',
-              subtitle: '点击右上角添加新待办，\n或在「周期」页安排重复事项',
-              action: CupertinoButton.filled(
-                borderRadius: BorderRadius.circular(20),
-                onPressed: () => openTodoEdit(context),
-                child: const Text('新建待办', style: TextStyle(fontSize: 15)),
-              ),
+              subtitle: '点击右下角的蓝色 + 按钮添加待办，\n'
+                  '或在「周期」页安排重复事项',
             ),
           ),
         ),
