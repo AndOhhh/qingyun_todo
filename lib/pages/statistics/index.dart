@@ -19,6 +19,9 @@ import 'package:qingyun_todo/utils/date_util.dart';
 /// 口径见 docs/05 §1：完成率按 `remind_date`、趋势按 `completed_at`、
 /// 硬删除不进分母、孤儿周期记录计入 M6、分母为 0 显示 `--`。
 class StatisticsView extends ConsumerStatefulWidget {
+  /// 范围切换选中块颜色：主色 12% 浅调（用户反馈默认灰白组合过于违和）
+  static const Color kRangeThumbColor = Color(0x1F007AFF);
+
   const StatisticsView({super.key});
 
   @override
@@ -66,9 +69,13 @@ class _StatisticsViewState extends ConsumerState<StatisticsView> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Column(
                 children: <Widget>[
-                  // S2：范围只作用于趋势 / 分布类图表（D2）
+                  // S2：范围只作用于趋势 / 分布类图表（D2）。
+                  // 选中态用主色浅调胶囊（与底部 Tab 胶囊同一设计语言），
+                  // 替代默认灰底白块的高对比组合。
                   CupertinoSlidingSegmentedControl<StatsRange>(
                     groupValue: _range,
+                    backgroundColor: Colors.white,
+                    thumbColor: StatisticsView.kRangeThumbColor,
                     onValueChanged: (value) {
                       if (value != null) setState(() => _range = value);
                     },
@@ -81,7 +88,15 @@ class _StatisticsViewState extends ConsumerState<StatisticsView> {
                           ),
                           child: Text(
                             range.label,
-                            style: const TextStyle(fontSize: 13),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: _range == range
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: _range == range
+                                  ? const Color(0xFF007AFF)
+                                  : const Color(0xFF636366),
+                            ),
                           ),
                         ),
                     },

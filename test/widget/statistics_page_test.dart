@@ -1,7 +1,10 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qingyun_todo/models/statistics_models.dart';
 import 'package:qingyun_todo/models/todo.dart';
+import 'package:qingyun_todo/pages/statistics/index.dart';
 import 'package:qingyun_todo/routes/index.dart';
 import 'package:qingyun_todo/stores/db_providers.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
@@ -161,5 +164,32 @@ void main() {
     expect(find.text('少'), findsOneWidget);
     expect(find.text('多'), findsOneWidget);
     expect(find.textContaining('1 天有完成 · 共 1 次'), findsOneWidget);
+  });
+
+  testWidgets('范围切换选中态为主色浅调而非默认灰白', (tester) async {
+    useTallScreen(tester);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[dbHelperProvider.overrideWithValue(store.db)],
+        child: getRootWidget(),
+      ),
+    );
+    await settle(tester);
+    await gotoStatistics(tester);
+
+    final control = tester.widget<CupertinoSlidingSegmentedControl<StatsRange>>(
+      find.byType(CupertinoSlidingSegmentedControl<StatsRange>),
+    );
+    expect(control.thumbColor, StatisticsView.kRangeThumbColor);
+    expect(control.backgroundColor, Colors.white);
+    // 选中项文字为主色加粗
+    final selected = tester.widget<Text>(
+      find.descendant(
+        of: find.byType(CupertinoSlidingSegmentedControl<StatsRange>),
+        matching: find.text('本周'),
+      ),
+    );
+    expect(selected.style?.color, const Color(0xFF007AFF));
+    expect(selected.style?.fontWeight, FontWeight.w600);
   });
 }
