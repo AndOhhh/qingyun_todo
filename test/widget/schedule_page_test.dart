@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qingyun_todo/models/todo.dart';
+import 'package:qingyun_todo/components/floating_add_button.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/day_timeline.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/schedule_calendar.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/schedule_task_card.dart';
@@ -137,8 +138,15 @@ void main() {
     await tester.tap(find.text('7'));
     await settle(tester);
     expect(find.textContaining('还没有安排'), findsOneWidget);
+    // 居中按钮已移除，引导文案指向右下角 FAB（且 FAB 预填选中日期）
+    expect(find.text('添加待办'), findsNothing);
+    expect(find.textContaining('点击右下角'), findsOneWidget);
+    expect(
+      find.textContaining('为 ${seventh.month}月${seventh.day}日 添加待办'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('添加待办'));
+    await tester.tap(find.byType(FloatingAddButton));
     await settle(tester);
     expect(find.text('新建待办'), findsOneWidget);
     // 提醒日期已预填为选中日
@@ -164,7 +172,8 @@ void main() {
     await gotoSchedule(tester);
 
     final nextMonth = DateUtil.addMonthsCalendar(today, 1);
-    await tester.tap(find.bySemanticsLabel('下个月'));
+    // 右上角箭头已取消：横滑月历翻月
+    await tester.fling(find.byType(ScheduleCalendar), const Offset(-400, 0), 1200);
     await settle(tester);
     // 标题栏随翻月联动
     expect(
@@ -372,7 +381,7 @@ void main() {
     expect(find.textContaining('农历'), findsWidgets);
 
     // 翻到上月（9 月）：中秋 / 白露 / 教师节 / 纪念日 + 「休」角标
-    await tester.tap(find.bySemanticsLabel('上个月'));
+    await tester.fling(find.byType(ScheduleCalendar), const Offset(400, 0), 1200);
     await settle(tester);
     expect(find.text('中秋节'), findsOneWidget);
     expect(find.text('白露'), findsOneWidget);

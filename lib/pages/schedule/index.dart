@@ -76,30 +76,21 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
               parent: AlwaysScrollableScrollPhysics(),
             ),
             slivers: <Widget>[
-              CupertinoSliverNavigationBar(
-                // 随月份变化强制重建：SliverPersistentHeader 在真机上会缓存
-                // 大标题子组件，仅靠 setState 刷新会出现「网格变了标题没变」
-                key: ValueKey<String>('schedule-nav-${DateUtil.monthKey(_month)}'),
-                backgroundColor: const Color(0xFFF2F2F7),
-                heroTag: 'schedule-large-title',
-                // 去掉大标题导航栏底部的发丝分割线（视觉更干净）
-                border: null,
-                // 去掉「日程」二字，标题直接展示「年月 + 周序号」，翻月时联动
-                largeTitle: _MonthTitle(month: _month, selected: _selected),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    _NavArrow(
-                      icon: CupertinoIcons.chevron_left,
-                      semanticLabel: '上个月',
-                      onTap: () => _shiftMonth(-1),
+              // 不用 CupertinoSliverNavigationBar：它的「middle 行 + 大标题行」
+              // 两段式结构在去掉标题文字后仍占据约 50px 空白；改为紧凑标题行，
+              // 整页内容上移。翻月只保留月历上的横滑手势（右上角箭头已取消）。
+              SliverToBoxAdapter(
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+                    child: Semantics(
+                      header: true,
+                      child: Center(
+                        child: _MonthTitle(month: _month, selected: _selected),
+                      ),
                     ),
-                    _NavArrow(
-                      icon: CupertinoIcons.chevron_right,
-                      semanticLabel: '下个月',
-                      onTap: () => _shiftMonth(1),
-                    ),
-                  ],
+                  ),
                 ),
               ),
               CupertinoSliverRefreshControl(
@@ -304,14 +295,17 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
                   color: Color(0xFF8E8E93),
                 ),
               ),
-              const SizedBox(height: 12),
-              CupertinoButton.filled(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-                borderRadius: BorderRadius.circular(16),
-                onPressed: () =>
-                    openTodoEdit(context, initialDate: _selected),
-                child: const Text('添加待办', style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 6),
+              // 与周期页空态一致：不放居中按钮（与右下角 FAB 重复），
+              // 只引导点击右下角 +；FAB 会预填当前选中日期
+              Text(
+                '点击右下角的蓝色 + 按钮\n为 ${_selected.month}月${_selected.day}日 添加待办',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.5,
+                  color: Color(0xFFAEAEB2),
+                ),
               ),
             ],
           ),
@@ -419,35 +413,6 @@ class _MonthTitle extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 标题栏右侧的翻月箭头
-class _NavArrow extends StatelessWidget {
-  final IconData icon;
-  final String semanticLabel;
-  final VoidCallback onTap;
-
-  const _NavArrow({
-    required this.icon,
-    required this.semanticLabel,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Icon(icon, size: 17, color: const Color(0xFF8E8E93)),
-        ),
       ),
     );
   }

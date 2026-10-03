@@ -404,6 +404,8 @@ void main() {
 
     await tester.tap(find.text('日程').last);
     await settle(tester);
-    expect(visibleNavBarHasNoBorder(), isTrue, reason: '日程页');
+    // 日程页已改为紧凑标题行：没有导航栏，自然也没有分割线
+    expect(find.byType(CupertinoSliverNavigationBar), findsNothing);
+    expect(find.textContaining('年'), findsWidgets);
   });
 }
