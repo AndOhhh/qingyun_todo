@@ -89,17 +89,15 @@ class PeriodView extends ConsumerWidget {
       hasScrollBody: false,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 100),
+        // 不再放居中新建按钮：与右下角浮动按钮重复，
+        // 空态只负责说明「周期是什么」并引导点击右下角 +
         child: EmptyState(
           icon: CupertinoIcons.repeat,
           iconColor: const Color(0xFF007AFF),
           title: '还没有周期',
           subtitle: '把「每 2 天喝牛奶 / 喝豆浆」这类重复安排交给周期，\n'
-              '它会自动生成待办，并按轮次记录完成情况。',
-          action: CupertinoButton.filled(
-            borderRadius: BorderRadius.circular(20),
-            onPressed: () => openPeriodicEdit(context),
-            child: const Text('新建周期', style: TextStyle(fontSize: 15)),
-          ),
+              '它会自动生成待办，并按轮次记录完成情况。\n'
+              '点击右下角的蓝色 + 按钮新建第一个周期。',
         ),
       ),
     );

@@ -275,7 +275,10 @@ void main() {
     await settle(tester);
     expect(find.text('还没有周期'), findsOneWidget);
 
-    await tester.tap(find.text('新建周期'));
+    // 空态不再提供居中新建按钮，统一走右下角浮动按钮
+    expect(find.text('新建周期'), findsNothing);
+    expect(find.textContaining('点击右下角'), findsOneWidget);
+    await tester.tap(find.byType(FloatingAddButton));
     await settle(tester);
     expect(find.text('周期规则'), findsOneWidget);
     expect(find.text('未来 3 轮预览'), findsOneWidget);
