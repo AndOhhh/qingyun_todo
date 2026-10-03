@@ -9,6 +9,7 @@ import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/models/todo_groups.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/day_timeline.dart';
+import 'package:qingyun_todo/pages/schedule/widgets/month_picker_sheet.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/month_summary.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/schedule_calendar.dart';
 import 'package:qingyun_todo/pages/schedule/widgets/schedule_task_card.dart';
@@ -56,6 +57,23 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
 
   void _jumpToday() => _selectDay(DateUtil.today());
 
+  /// 标题 → 月份选择器：跳转后选中日落在「今天」（若在本月）否则月首
+  Future<void> _pickMonth() async {
+    final picked = await showMonthPicker(
+      context,
+      month: _month,
+      today: DateUtil.today(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _month = picked;
+      final today = DateUtil.today();
+      _selected = (today.year == picked.year && today.month == picked.month)
+          ? today
+          : picked;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = DateUtil.today();
@@ -84,10 +102,20 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
                   bottom: false,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+                    // 点标题弹出月份选择器（iOS 日历同款快速跳月）
                     child: Semantics(
                       header: true,
-                      child: Center(
-                        child: _MonthTitle(month: _month, selected: _selected),
+                      button: true,
+                      label: '选择月份',
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _pickMonth,
+                        child: Center(
+                          child: _MonthTitle(
+                            month: _month,
+                            selected: _selected,
+                          ),
+                        ),
                       ),
                     ),
                   ),

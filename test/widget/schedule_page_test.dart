@@ -389,4 +389,53 @@ void main() {
     expect(find.text('抗战胜利纪念日'), findsOneWidget);
     expect(find.text('休'), findsWidgets);
   });
+
+  testWidgets('点标题弹出月份选择器：滚动月份轮并确定后标题与月历联动', (tester) async {
+    await store.tasks.insert(Todo(title: '今天的事', remindDate: today));
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    // 点标题（Text.rich 位于可点击区域内）；真机侧另有「选择月份」语义标签
+    await tester.tap(find.textContaining('${today.year}年${today.month}月'));
+    await settle(tester);
+    expect(find.text('跳转月份'), findsOneWidget);
+    expect(find.textContaining('回到本月'), findsOneWidget);
+
+    // 月份滚轮上滑一格 → 下一个月
+    await tester.drag(
+      find.byType(CupertinoPicker).last,
+      const Offset(0, -40),
+    );
+    await settle(tester);
+    await tester.tap(find.text('确定'));
+    await settle(tester);
+
+    final next = DateUtil.addMonthsCalendar(today, 1);
+    expect(
+      find.textContaining('${next.year}年${next.month}月'),
+      findsWidgets,
+    );
+    // 选中日落到跳转月的月首（当日头部 / 空态文案都会带上该日期）
+    expect(
+      find.textContaining('${next.month}月1日'),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('月份选择器取消不改变当前月份', (tester) async {
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    await tester.tap(find.textContaining('${today.year}年${today.month}月'));
+    await settle(tester);
+    await tester.drag(find.byType(CupertinoPicker).last, const Offset(0, -80));
+    await settle(tester);
+    await tester.tap(find.text('取消'));
+    await settle(tester);
+
+    expect(
+      find.textContaining('${today.year}年${today.month}月'),
+      findsWidgets,
+    );
+  });
 }
