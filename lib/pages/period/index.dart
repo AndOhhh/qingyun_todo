@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qingyun_todo/components/empty_state.dart';
 import 'package:qingyun_todo/components/error_state.dart';
 import 'package:qingyun_todo/components/floating_add_button.dart';
-import 'package:qingyun_todo/components/swipe_action.dart';
 import 'package:qingyun_todo/logic/periodic_actions.dart';
 import 'package:qingyun_todo/models/periodic.dart';
 import 'package:qingyun_todo/pages/period/widgets/periodic_card.dart';
@@ -117,25 +116,11 @@ class PeriodView extends ConsumerWidget {
           final periodic = entry.periodic;
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: SwipeAction(
-              actions: <SwipeActionItem>[
-                SwipeActionItem(
-                  icon: CupertinoIcons.trash,
-                  label: '删除',
-                  color: const Color(0xFFFF3B30),
-                  onTap: () => requestDeletePeriodic(
-                    context,
-                    periodicId: periodic.id!,
-                    periodicName: periodic.name,
-                  ),
-                ),
-              ],
-              child: PeriodicCard(
-                entry: entry,
-                onTap: () => openPeriodicDetail(context, periodic.id!),
-                onToggleActive: (value) =>
-                    togglePeriodicActive(context, ref, periodic),
-              ),
+            child: PeriodicCard(
+              entry: entry,
+              onTap: () => openPeriodicDetail(context, periodic.id!),
+              onToggleActive: (value) =>
+                  togglePeriodicActive(context, ref, periodic),
             ),
           );
         },

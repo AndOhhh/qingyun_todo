@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:qingyun_todo/components/error_state.dart';
 import 'package:qingyun_todo/components/floating_add_button.dart';
-import 'package:qingyun_todo/components/swipe_action.dart';
 import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/models/todo_groups.dart';
@@ -276,22 +275,11 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
           final task = tasks[index];
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: SwipeAction(
-              borderRadius: 16,
-              actions: <SwipeActionItem>[
-                SwipeActionItem(
-                  icon: CupertinoIcons.trash,
-                  label: '删除',
-                  color: const Color(0xFFFF3B30),
-                  onTap: () => requestDeleteTodo(context, ref, task),
-                ),
-              ],
-              child: ScheduleTaskCard(
-                task: task,
-                onToggle: (_) => toggleTodoComplete(context, ref, task),
-                // 复用首页的编辑控件（含周期实例「只影响这一次」提示）
-                onTap: () => openTodoEdit(context, taskId: task.id),
-              ),
+            child: ScheduleTaskCard(
+              task: task,
+              onToggle: (_) => toggleTodoComplete(context, ref, task),
+              // 复用首页的编辑控件（含周期实例「只影响这一次」提示与删除入口）
+              onTap: () => openTodoEdit(context, taskId: task.id),
             ),
           );
         },

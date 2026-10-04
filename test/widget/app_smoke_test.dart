@@ -235,33 +235,35 @@ void main() {
     expect(all.single.sourceType, TaskSourceType.regular);
   });
 
-  testWidgets('左滑露出红色垃圾桶 → 二次确认 → 硬删除 → 5 秒内可撤销（Q5 / B3）', (tester) async {
+  testWidgets('删除待办：编辑页红色按钮 → 二次确认 → 硬删除 → 5 秒撤销（Q5 / B3）', (tester) async {
     useTallScreen(tester);
     await store.tasks.insert(
       Todo(title: '要删的待办', remindDate: DateUtil.today()),
     );
     await pumpApp(tester);
 
-    // 左滑：露出动作按钮，但不会滑走即删
+    // 2026-10-05 起卡片不再响应滑动手势：横拖后不应出现任何删除动作
     await tester.drag(inTodo(find.text('要删的待办')), const Offset(-200, 0));
     await settle(tester);
-    expect(find.text('删除'), findsOneWidget);
-    expect(await store.tasks.queryAll(), hasLength(1), reason: '仅滑动不应删除');
+    expect(find.text('删除'), findsNothing);
+    expect(await store.tasks.queryAll(), hasLength(1));
 
-    await tester.tap(find.text('删除'));
+    // 删除入口在编辑页底部红色按钮
+    await tester.tap(inTodo(find.text('要删的待办')));
     await settle(tester);
-    // 二次确认弹窗：文案必须与「标记完成」区分
-    expect(find.text('删除待办'), findsOneWidget);
+    expect(find.text('编辑待办'), findsOneWidget);
+    await tester.tap(find.text('删除待办').first);
+    await settle(tester);
+    // 二次确认文案必须与「标记完成」区分
     expect(find.textContaining('永久移除'), findsOneWidget);
-
     await tester.tap(find.widgetWithText(CupertinoDialogAction, '删除'));
     await settle(tester);
 
-    // 物理删除：记录与统计分母同时消失
+    // 硬删除：记录与统计分母同时消失
     expect(await store.tasks.queryAll(), isEmpty);
     expect(inTodo(find.text('要删的待办')), findsNothing);
 
-    // SnackBar 撤销（B3-2）：按原 id / 原字段恢复
+    // SnackBar 撤销：按原 id / 原字段恢复
     expect(find.text('撤销'), findsOneWidget);
     await tester.tap(find.text('撤销'));
     await settle(tester);

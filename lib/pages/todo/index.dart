@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qingyun_todo/components/empty_state.dart';
 import 'package:qingyun_todo/components/error_state.dart';
 import 'package:qingyun_todo/components/floating_add_button.dart';
-import 'package:qingyun_todo/components/swipe_action.dart';
 import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/models/todo_groups.dart';
@@ -173,23 +172,11 @@ class _TodoViewState extends ConsumerState<TodoView> {
         itemBuilder: (context, index) {
           final task = todos[index];
           return Padding(
-            // 间距放在卡片外层：SwipeAction 的动作区才能与卡片等高
             padding: const EdgeInsets.only(bottom: 10),
-            child: SwipeAction(
-              actions: <SwipeActionItem>[
-                SwipeActionItem(
-                  icon: CupertinoIcons.trash,
-                  label: '删除',
-                  // 红色垃圾桶：与绿色勾选在颜色、手势、确认强度上全部区分（Q5）
-                  color: const Color(0xFFFF3B30),
-                  onTap: () => requestDeleteTodo(context, ref, task),
-                ),
-              ],
-              child: TodoCard(
-                todo: task,
-                onToggle: (_) => toggleTodoComplete(context, ref, task),
-                onTap: () => openTodoEdit(context, taskId: task.id),
-              ),
+            child: TodoCard(
+              todo: task,
+              onToggle: (_) => toggleTodoComplete(context, ref, task),
+              onTap: () => openTodoEdit(context, taskId: task.id),
             ),
           );
         },

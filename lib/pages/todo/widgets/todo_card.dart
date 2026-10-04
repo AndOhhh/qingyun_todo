@@ -9,8 +9,8 @@ import 'package:qingyun_todo/models/todo.dart';
 /// 标签顺序固定（docs/01 §3.1）：`已逾期` → `周期·{名}` → 日期 → 提醒时间。
 /// 子任务 `x/y` 标签已按 Q2 决策移除。
 ///
-/// ⚠️ 卡片自身不带外边距，由列表侧用 `Padding` 控制间距，
-/// 以保证 [SwipeAction] 的动作区与卡片等高。
+/// ⚠️ 卡片自身不带外边距，由列表侧用 `Padding` 控制间距。
+/// 删除入口在编辑页底部红色按钮（2026-10-05 起移除左滑删除手势）。
 class TodoCard extends StatelessWidget {
   final Todo todo;
 

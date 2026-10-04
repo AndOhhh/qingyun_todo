@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import 'package:qingyun_todo/components/swipe_action.dart';
 import 'package:qingyun_todo/models/periodic_item.dart';
 import 'package:qingyun_todo/pages/period/detail/widgets/periodic_item_tile.dart';
 
@@ -13,7 +12,6 @@ class DayGroup extends StatelessWidget {
   final List<PeriodicItem> items;
   final VoidCallback onAdd;
   final ValueChanged<PeriodicItem> onEdit;
-  final ValueChanged<PeriodicItem> onDelete;
 
   /// 天序上限（用于标题上的「共 N 天」提示与越界判断）
   final int dayCount;
@@ -24,7 +22,6 @@ class DayGroup extends StatelessWidget {
     required this.items,
     required this.onAdd,
     required this.onEdit,
-    required this.onDelete,
     required this.dayCount,
   });
 
@@ -103,27 +100,9 @@ class DayGroup extends StatelessWidget {
                           indent: 16,
                           color: Color(0xFFE5E5EA),
                         ),
-                      ClipRRect(
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(i == 0 ? 16 : 0),
-                          bottom:
-                              Radius.circular(i == items.length - 1 ? 16 : 0),
-                        ),
-                        child: SwipeAction(
-                          borderRadius: 0,
-                          actions: <SwipeActionItem>[
-                            SwipeActionItem(
-                              icon: CupertinoIcons.trash,
-                              label: '删除',
-                              color: const Color(0xFFFF3B30),
-                              onTap: () => onDelete(items[i]),
-                            ),
-                          ],
-                          child: PeriodicItemTile(
-                            item: items[i],
-                            onTap: () => onEdit(items[i]),
-                          ),
-                        ),
+                      PeriodicItemTile(
+                        item: items[i],
+                        onTap: () => onEdit(items[i]),
                       ),
                     ],
                   ],

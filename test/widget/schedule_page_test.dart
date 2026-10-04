@@ -88,9 +88,11 @@ void main() {
 
   testWidgets('点日期切换当日安排；点卡片进入编辑页（复用首页编辑控件）', (tester) async {
     useTallScreen(tester);
-    final fifth = dayOfCurrentMonth(5);
+    // 取一个与「今天」不同的日期（避免当天恰为 5 号时两条数据同天）
+    final otherDayNumber = today.day <= 20 ? today.day + 3 : today.day - 3;
+    final otherDay = dayOfCurrentMonth(otherDayNumber);
     await store.tasks.insert(
-      Todo(title: '五号的事', remindDate: fifth, remindTime: '09:00'),
+      Todo(title: '另一天的事', remindDate: otherDay, remindTime: '09:00'),
     );
     await store.tasks.insert(Todo(title: '今天的事', remindDate: today));
     await pumpApp(tester);
@@ -98,22 +100,22 @@ void main() {
 
     // 初始选中今天
     expect(find.text('今天的事'), findsOneWidget);
-    expect(find.text('五号的事'), findsNothing);
+    expect(find.text('另一天的事'), findsNothing);
 
-    await tester.tap(find.text('5'));
+    await tester.tap(find.text('$otherDayNumber'));
     await settle(tester);
-    expect(find.text('五号的事'), findsOneWidget);
+    expect(find.text('另一天的事'), findsOneWidget);
     expect(find.text('今天的事'), findsNothing);
     expect(find.textContaining('· 1 项'), findsOneWidget);
     // 无提醒时间显示「全天」，有时间显示时间
     expect(find.text('09:00'), findsOneWidget);
 
     // 点卡片主体 → 复用待办编辑页
-    await tester.tap(find.text('五号的事'));
+    await tester.tap(find.text('另一天的事'));
     await settle(tester);
     expect(find.text('编辑待办'), findsOneWidget);
     expect(
-      find.textContaining('${fifth.month}月${fifth.day}日'),
+      find.textContaining('${otherDay.month}月${otherDay.day}日'),
       findsWidgets,
     );
 
@@ -123,7 +125,7 @@ void main() {
     // 勾选完成 → 写库 + 标记与计数刷新
     await tester.tap(find.byIcon(CupertinoIcons.circle));
     await settle(tester);
-    final tasks = await store.tasks.queryByDate(fifth);
+    final tasks = await store.tasks.queryByDate(otherDay);
     expect(tasks.single.isCompleted, isTrue);
     expect(tasks.single.completedAt, isNotNull);
     expect(find.text('100%'), findsNothing); // 日程页不展示进度卡
@@ -210,26 +212,6 @@ void main() {
     await tester.tap(find.text('当日安排'));
     await settle(tester);
     expect(find.text('今天的事'), findsOneWidget);
-  });
-
-  testWidgets('左滑日程卡片复用待办删除流程（二次确认 + 撤销）', (tester) async {
-    useTallScreen(tester);
-    await store.tasks.insert(Todo(title: '要删的', remindDate: today));
-    await pumpApp(tester);
-    await gotoSchedule(tester);
-
-    await tester.drag(find.text('要删的'), const Offset(-200, 0));
-    await settle(tester);
-    await tester.tap(find.text('删除'));
-    await settle(tester);
-    expect(find.text('删除待办'), findsOneWidget);
-    await tester.tap(find.widgetWithText(CupertinoDialogAction, '删除'));
-    await settle(tester);
-    expect(await store.tasks.queryAll(), isEmpty);
-
-    await tester.tap(find.text('撤销'));
-    await settle(tester);
-    expect((await store.tasks.queryAll()).single.title, '要删的');
   });
 
   testWidgets('2a 时间轴：带时间的任务画刻度点，全天任务单独标签', (tester) async {
@@ -351,7 +333,12 @@ void main() {
     );
     await store.tasks.insert(Todo(title: '今天', remindDate: today));
     await store.tasks.insert(
-      Todo(title: '五天后', remindDate: DateUtil.addDays(today, 5)),
+      Todo(
+        title: '同月另一天',
+        remindDate: dayOfCurrentMonth(
+          today.day <= 20 ? today.day + 3 : today.day - 3,
+        ),
+      ),
     );
     await store.tasks.toggleComplete(doneId, to: true);
     await pumpApp(tester);

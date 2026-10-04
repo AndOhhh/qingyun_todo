@@ -139,8 +139,6 @@ class PeriodicDetailPage extends ConsumerWidget {
             ),
             onEdit: (item) =>
                 openPeriodicItemEdit(context, itemId: item.id),
-            onDelete: (item) =>
-                requestDeletePeriodicItem(context, ref, item),
           ),
           const SizedBox(height: 16),
         ],
