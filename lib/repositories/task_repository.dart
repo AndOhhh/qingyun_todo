@@ -349,6 +349,17 @@ class TaskRepository {
     return ((rows.first['c'] as num?)?.toInt() ?? 0) > 0;
   }
 
+  /// 需要参与通知排期的任务：未完成且带提醒时间（通知服务 reconcile 用）
+  Future<List<Todo>> queryRemindable() async {
+    final db = await _db;
+    final rows = await db.query(
+      Todo.table,
+      where: 'is_completed = 0 AND remind_time IS NOT NULL',
+      orderBy: 'remind_date ASC, remind_time ASC',
+    );
+    return rows.map(Todo.fromMap).toList(growable: false);
+  }
+
   /// 到点待通知的任务（Phase 6）：`提醒时刻 <= now` 且未完成、未通知过
   Future<List<Todo>> queryDueForNotify(DateTime now) async {
     final db = await _db;

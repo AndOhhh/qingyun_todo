@@ -6,6 +6,7 @@ import 'package:qingyun_todo/repositories/periodic_generator.dart';
 import 'package:qingyun_todo/repositories/periodic_item_repository.dart';
 import 'package:qingyun_todo/repositories/periodic_repository.dart';
 import 'package:qingyun_todo/repositories/task_repository.dart';
+import 'package:qingyun_todo/services/notification_service.dart';
 import 'package:qingyun_todo/utils/db_helper.dart';
 
 /// 基础设施 provider：DB 单例 + 各 Repository（docs/04 §2 分层）。
@@ -58,4 +59,10 @@ final Provider<PeriodicItemRepository> periodicItemRepositoryProvider =
     ref.watch(dbHelperProvider),
     generator: ref.watch(periodicGeneratorProvider),
   ),
+);
+
+/// 本地提醒通知服务（FR-19）。单例语义由 Provider 保证。
+final Provider<NotificationService> notificationServiceProvider =
+    Provider<NotificationService>(
+  (ref) => NotificationService(ref.watch(taskRepositoryProvider)),
 );

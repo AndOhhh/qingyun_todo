@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:qingyun_todo/stores/db_providers.dart';
+import 'package:qingyun_todo/routes/index.dart';
 import 'package:qingyun_todo/stores/invalidation.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
 
@@ -18,6 +19,7 @@ final StateProvider<String> lastCalibratedDateProvider = StateProvider<String>(
 /// 幂等性保证下一次触发（跨日 / 新建周期 / 完成一轮）可安全重试。
 Future<void> bootstrapApp(WidgetRef ref) async {
   try {
+    bindNotificationNavigation();
     await ref.read(databaseProvider.future);
     final inserted =
         await ref.read(periodicGeneratorProvider).generateForWindow();
@@ -26,6 +28,10 @@ Future<void> bootstrapApp(WidgetRef ref) async {
     if (inserted > 0) {
       invalidateAfterGenerate(ref.invalidate);
     }
+    // FR-19：启动时初始化通知并按当前数据重排（含补发窗口内的到期提醒）
+    final notify = ref.read(notificationServiceProvider);
+    await notify.init();
+    await notify.reconcile();
   } catch (error, stack) {
     debugPrint('[bootstrap] 周期实例生成失败，将在下次触发时重试：$error');
     debugPrintStack(stackTrace: stack);

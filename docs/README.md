@@ -61,6 +61,7 @@
 | **Q1** ✅ | 周期是否需要"暂停 / 终止日期"？是否补生成历史实例？ | 采纳默认：需要 `is_active` 暂停与 `end_date` 终止；**不补生成历史**，从当前轮开始 | 02 §4.1、04 §5、Phase 3 |
 | **Q2** ✅ | 子任务是否纳入 v1？ | **移除子任务功能**——每条待办都是独立任务。`subtasks` 表不建（DDL 移入 [02 附录](./02-数据库设计.md)），并清理 `Todo.subDone/subTotal`、卡片 `x/y` 标签与 mock 数据 | 02 §4.4、03 R11、Phase 2 |
 | **Q5** ✅ | 待办删除语义 | **硬删除**，但必须与"完成"严格区分（手势方向、颜色、文案、确认强度、统计口径全不同）+ 5 秒撤销；**删除周期时保留已完成的周期任务记录**（未完成实例物理删除，已完成实例断开关联后保留为历史；手动删除的实例不保留） | 02 §7.3、04 §4.1、Phase 2/3 |
+| **Q4** ✅ | 本地提醒插件选型 | **定案：`flutter_local_notifications 22.x` + `timezone` + `flutter_timezone`**。系统级排期（`zonedSchedule`，Android 精确闹钟 / iOS 日历触发），App 被杀仍到点；`is_notified` 在「排期成功 / 补发成功」时置 1 防重复；重启后由 boot receiver 恢复排期 | 03 §3、Phase 6 |
 | **Q15** ✅ | 硬删除的周期实例会不会被生成引擎重新写回？ | **实施期发现并修复**：会。幂等键 `UNIQUE(periodic_item_id, cycle_index)` 在实例被删后空出 → 新增 `periodic_skips` 墓碑表（schema v2.2），生成时跳过、撤销删除时清除 | 02 §4.4、04 §5、M1 |
 | **Q7** ✅ | 状态管理方案 | **定案：Riverpod**（`flutter_riverpod`，**不引入** `riverpod_generator` / `build_runner`）。理由：① DB 读写全异步，`AsyncValue` 直接省掉每页 loading/error/data 样板；② 待办页与周期页双向依赖，`ref.invalidate` 比手写通知可靠；③ `overrideWith` 让 22 条验收用例可脱离真机数据库运行。落地约定（provider 命名、失效矩阵、全局 vs 局部状态边界）见 [07 §A.1](./07-开发计划-待办与周期.md) | 04 §2、07 §A.1、Phase 2 架构 |
 | **Q8** ✅ | 修改周期 `start_date` / `interval_*` 后已生成实例如何处理 | 采纳默认：**不追溯**，已有实例保持原日期，新规则只对未生成轮次生效，`completed_count` 不重置 | 01 §4.6、02 §7.4、Phase 3 |

@@ -8,6 +8,8 @@ import 'package:qingyun_todo/pages/schedule/index.dart';
 import 'package:qingyun_todo/pages/statistics/index.dart';
 import 'package:qingyun_todo/pages/todo/index.dart';
 import 'package:qingyun_todo/stores/bootstrap.dart';
+import 'package:qingyun_todo/stores/db_providers.dart';
+import 'package:qingyun_todo/stores/todo_store.dart';
 
 /// 选中态统一使用的蓝色（iOS Files 风格）
 const Color _kSelectedColor = Color(0xFF007AFF);
@@ -70,11 +72,18 @@ class _MainPageState extends ConsumerState<MainPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
       recalibrateIfDayChanged(ref);
+      // 回前台重排通知：覆盖「App 被杀期间改过数据 / 系统重启丢失排期」等场景
+      ref.read(notificationServiceProvider).reconcile();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 任何待办写操作都会失效 todoGroupsProvider → 借此统一触发通知重排，
+    // 避免在各写操作调用点零散维护通知状态
+    ref.listen<Object?>(todoGroupsProvider, (previous, next) {
+      ref.read(notificationServiceProvider).reconcile();
+    });
     return Scaffold(
       extendBody: true,
       backgroundColor: const Color(0xFFF2F2F7),

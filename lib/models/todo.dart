@@ -130,6 +130,23 @@ class Todo {
   String? get cycleLabel =>
       cycleIndex == null ? null : '第 ${cycleIndex! + 1} 轮';
 
+  /// 提醒的完整时刻（`remind_date` + `remind_time`）；未设置时间时为 null
+  /// （通知排期依赖精确时刻，无时间的任务只做日期展示、不发通知）
+  DateTime? get remindAt {
+    final time = remindTime;
+    if (time == null) return null;
+    final parts = time.split(':');
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    return DateTime(
+      remindDate.year,
+      remindDate.month,
+      remindDate.day,
+      hour,
+      minute,
+    );
+  }
+
   /// 提醒日期 + 时间的完整文案
   String get remindText {
     final date = DateUtil.humanDate(remindDate);
