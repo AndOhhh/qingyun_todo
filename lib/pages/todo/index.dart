@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:qingyun_todo/components/empty_state.dart';
 import 'package:qingyun_todo/components/error_state.dart';
+import 'package:qingyun_todo/components/notification_banner.dart';
 import 'package:qingyun_todo/components/floating_add_button.dart';
 import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
@@ -12,6 +13,8 @@ import 'package:qingyun_todo/pages/todo/widgets/section_header.dart';
 import 'package:qingyun_todo/pages/todo/widgets/todo_card.dart';
 import 'package:qingyun_todo/pages/todo/widgets/today_progress.dart';
 import 'package:qingyun_todo/stores/todo_store.dart';
+import 'package:qingyun_todo/services/notification_service.dart';
+import 'package:qingyun_todo/stores/db_providers.dart';
 
 /// 待办页：今日进度卡 + 五组列表（逾期 / 今天 / 明天 / 后续 / 已完成）。
 ///
@@ -28,6 +31,38 @@ class _TodoViewState extends ConsumerState<TodoView> {
   /// 「已完成」分组是否展开（Q10：默认折叠）。
   /// 纯 UI 偏好，按 docs/07 §A.1 的边界约定留在 Widget 内，不进 provider。
   bool _showCompleted = false;
+
+  /// 通知自检结果；仅当存在阻断项时展示横幅
+  NotificationHealth? _health;
+  bool _healthDismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshHealth();
+    });
+  }
+
+  Future<void> _refreshHealth() async {
+    final health =
+        await ref.read(notificationServiceProvider).checkHealth();
+    if (!mounted) return;
+    setState(() => _health = health);
+  }
+
+  Future<void> _fixNotification() async {
+    final service = ref.read(notificationServiceProvider);
+    final blocker = _health?.blocker;
+    if (blocker == NotificationBlocker.permissionDenied) {
+      await service.openNotificationSettings();
+    } else if (blocker == NotificationBlocker.exactAlarmDenied) {
+      await service.requestExactAlarms();
+    }
+    await service.reconcile();
+    if (!mounted) return;
+    await _refreshHealth();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +90,19 @@ class _TodoViewState extends ConsumerState<TodoView> {
                 border: null,
             largeTitle: const Text('待办', style: TextStyle(color: Colors.black)),
           ),
+          // 通知自检横幅：权限/精确闹钟被拒时给出原因与一键修复
+          if (_health != null &&
+              !_healthDismissed &&
+              _health!.blocker != NotificationBlocker.none &&
+              _health!.blocker != NotificationBlocker.unavailable)
+            SliverToBoxAdapter(
+              child: NotificationBanner(
+                health: _health!,
+                onDismiss: () => setState(() => _healthDismissed = true),
+                onFix: _fixNotification,
+                onFixed: _refreshHealth,
+              ),
+            ),
           // 下拉刷新：重取分组与今日进度
           CupertinoSliverRefreshControl(
             onRefresh: () async {

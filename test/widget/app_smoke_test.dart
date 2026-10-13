@@ -7,6 +7,7 @@ import 'package:qingyun_todo/models/periodic_item.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/pages/todo/index.dart';
 import 'package:qingyun_todo/components/floating_add_button.dart';
+import 'package:qingyun_todo/components/notification_banner.dart';
 import 'package:qingyun_todo/routes/index.dart';
 import 'package:qingyun_todo/stores/db_providers.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
@@ -138,6 +139,8 @@ void main() {
     useTallScreen(tester);
     await pumpApp(tester);
     expect(find.text('全部搞定！'), findsOneWidget);
+    // 测试环境通知插件不可用 → 自检横幅不出现
+    expect(find.byType(NotificationBanner), findsNothing);
     // 空态不再提供居中新建按钮，引导点击右下角 FAB
     expect(find.text('新建待办'), findsNothing);
     expect(find.textContaining('点击右下角'), findsOneWidget);

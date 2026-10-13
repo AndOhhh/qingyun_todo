@@ -72,11 +72,12 @@ void main() {
     final db = await store.db.database;
     await db.insert('tasks', <String, Object?>{
       'title': '孤儿周期实例',
-      'remind_date': DateUtil.formatDate(DateUtil.addDays(today, -1)),
+      // 放在 8 天前：确保落在「本周」之外，不污染 M2 的 50% 断言
+      'remind_date': DateUtil.formatDate(DateUtil.addDays(today, -8)),
       'priority': 'none',
       'is_completed': 1,
       'completed_at':
-          DateUtil.formatTimestamp(DateUtil.addDays(today, -1)),
+          DateUtil.formatTimestamp(DateUtil.addDays(today, -8)),
       'source_type': 'PERIODIC',
       'periodic_id': null,
       'cycle_index': 0,

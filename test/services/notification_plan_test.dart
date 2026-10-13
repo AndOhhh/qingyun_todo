@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/services/notification_service.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import '../repositories/test_support.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
 
 /// 通知同步计划（纯函数）的口径测试：排期 / 补发 / 静默三类互不越界。
@@ -124,5 +127,33 @@ void main() {
       ).remindAt,
       isNull,
     );
+  });
+  group('未初始化时的降级行为', () {
+    test('init 失败（测试环境无插件）→ available=false 且 reconcile 为空操作', () async {
+      sqfliteFfiInit();
+      final store = await TestStore.create();
+      final now = DateTime.now();
+      final id = await store.tasks.insert(
+        Todo(
+          title: '带提醒时间',
+          remindDate: DateUtil.dateOnly(now),
+          remindTime: '09:00',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final service = NotificationService(store.tasks);
+      await service.init(); // 测试环境插件缺失 → 降级
+      expect(service.isAvailable, isFalse);
+
+      await service.reconcile(); // 不得抛异常、不得写库
+      final task = (await store.tasks.findById(id))!;
+      expect(task.isNotified, isFalse);
+
+      final health = await service.checkHealth();
+      expect(health.blocker, NotificationBlocker.unavailable);
+      expect(health.pendingCount, 0);
+      await store.dispose();
+    });
   });
 }
