@@ -144,6 +144,11 @@ class NotificationService {
 
   String? _lastError;
 
+  /// 排期时捕获到 exact_alarms_not_permitted 的硬证据。
+  /// 部分机型 `canScheduleExactNotifications()` 返回 null/true 不可信，
+  /// 以实际排期异常为准（一加 13 实测横幅不出现的根因）
+  bool _exactAlarmDenied = false;
+
   /// 最近一次排期 / 补发失败原因（自检横幅展示用）
   String? get lastError => _lastError;
 
@@ -230,11 +235,14 @@ class NotificationService {
   /// - [toShow]：已到期、本会话未发过、且在 5 分钟补发窗内的任务；
   /// - [assumeDelivered]：已到期且 OS 排期已消失（= 后台已由 OS 送达）的任务，
   ///   供启动时播种 [_shownThisSession]。
+  /// [seeding] = true 表示启动/回前台的播种趟（只标记「后台已送达」，不补发）；
+  /// false 表示周期巡检趟（到期未发必须补发）
   static ForegroundPlan computeForegroundPlan({
     required List<Todo> tasks,
     required Set<int> pendingIds,
     required Set<int> shownIds,
     required DateTime now,
+    bool seeding = false,
     Duration preemptWindow = kPreemptWindow,
     Duration lateWindow = kLateWindow,
   }) {
@@ -252,18 +260,18 @@ class NotificationService {
         if (isPending) toCancel.add(id);
       } else if (delta.isNegative && delta >= -lateWindow) {
         if (shownIds.contains(id)) continue;
-        if (isPending) {
-          // 到期了 OS 却没发（闹钟被 ROM 丢弃）→ 前台补发并收回排期
-          toShow.add(task);
-          toCancel.add(id);
-        } else {
-          // OS 排期已消失：要么后台送达过（播种跳过），要么刚被收回待补发
+        if (seeding && !isPending) {
+          // 仅播种趟：OS 排期已消失 = 后台大概率由 OS 送达过，记为已送达防双发
           assumeDelivered.add(id);
+          continue;
         }
+        // 巡检趟：已到期且本会话没发过 → 必须由前台补发。
+        // 注意：此时 isPending 通常为 false（90s 前已被我们收回），
+        // 绝不能把它当成「已送达」，否则兜底永远发不出去（一加13 实测踩坑）
+        toShow.add(task);
+        if (isPending) toCancel.add(id);
       }
     }
-    // 待补发的任务不应被当作「已送达」
-    assumeDelivered.removeWhere((id) => toShow.any((t) => t.id == id));
     return ForegroundPlan(
       toShow: toShow,
       toCancel: toCancel,
@@ -324,6 +332,9 @@ class NotificationService {
       // 降级为非精确（Doze 下仍会触发，可能延迟几分钟），保证提醒不丢
       debugPrint('[notify] 精确排期失败，降级为非精确：$error');
       _lastError = '$error';
+      if ('$error'.contains('exact_alarms_not_permitted')) {
+        _exactAlarmDenied = true;
+      }
       await _plugin.zonedSchedule(
         id: task.id!,
         title: '待办提醒',
@@ -374,7 +385,8 @@ class NotificationService {
               AndroidFlutterLocalNotificationsPlugin>();
       if (android != null) {
         enabled = await android.areNotificationsEnabled() ?? true;
-        exact = await android.canScheduleExactNotifications() ?? true;
+        exact = (await android.canScheduleExactNotifications() ?? true) &&
+            !_exactAlarmDenied;
       } else {
         // iOS / macOS 分别解析，避免 ?? 合并后丢失 checkPermissions 签名
         final ios = _plugin
