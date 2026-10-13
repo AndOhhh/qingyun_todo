@@ -395,6 +395,43 @@ void main() {
     expect(find.text('新建待办'), findsOneWidget);
   });
 
+  testWidgets('底部安全区（iOS Home 指示条）不遮挡悬浮按钮：双端与导航栏间距一致', (tester) async {
+    useTallScreen(tester);
+    // 模拟 iOS Home 指示条：底部 34pt 安全区（Android 手势条同理，无安全区时为 0）
+    const double kBottomInset = 34;
+    tester.view.padding = const FakeViewPadding(bottom: kBottomInset);
+    tester.view.viewPadding = const FakeViewPadding(bottom: kBottomInset);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+
+    await pumpApp(tester);
+
+    // useTallScreen：1100x2400 @ dpr 1 → 逻辑高度 2400
+    const double screenHeight = 2400;
+    // 悬浮导航栏顶边 = 底部安全区 + 8 外边距 + 66 栏高（见 MainPage._buildTabBar）
+    double navTop(double inset) => screenHeight - (inset + 8 + 66);
+    // 无安全区（安卓）时按钮与导航栏的间距，作为双端一致性基准
+    const double kGap = 22;
+
+    // 待办页：FAB 底边 = 安全区 + 96，整体落在导航栏上方且间距恒定
+    Rect fab = tester.getRect(find.byType(FloatingAddButton));
+    expect(fab.bottom, screenHeight - kBottomInset - 96);
+    expect(fab.bottom, lessThanOrEqualTo(navTop(kBottomInset)));
+    expect(navTop(kBottomInset) - fab.bottom, kGap);
+
+    // 日程页：新增按钮与「今」按钮都避让安全区，间距与待办页一致
+    await tester.tap(find.text('日程').last);
+    await settle(tester);
+    fab = tester.getRect(find.byType(FloatingAddButton));
+    expect(fab.bottom, screenHeight - kBottomInset - 96);
+    expect(navTop(kBottomInset) - fab.bottom, kGap);
+    final Rect today = tester.getRect(
+      find.ancestor(of: find.text('今'), matching: find.byType(GestureDetector)),
+    );
+    expect(today.bottom, screenHeight - kBottomInset - 164);
+    expect(today.bottom, lessThan(fab.top));
+  });
+
   testWidgets('三个 Tab 页的大标题导航栏无底部分割线', (tester) async {
     await pumpApp(tester);
 

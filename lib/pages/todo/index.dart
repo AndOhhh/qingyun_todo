@@ -150,7 +150,7 @@ class _TodoViewState extends ConsumerState<TodoView> {
           // 右下角浮动新增按钮（替代原导航栏右上角 +）
           Positioned(
             right: 16,
-            bottom: 96,
+            bottom: floatingBottomOffset(context),
             child: FloatingAddButton(
               semanticLabel: '新建待办',
               onPressed: () => openTodoEdit(context),

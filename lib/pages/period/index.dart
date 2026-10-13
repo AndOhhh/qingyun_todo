@@ -72,7 +72,7 @@ class PeriodView extends ConsumerWidget {
       ),
           Positioned(
             right: 16,
-            bottom: 96,
+            bottom: floatingBottomOffset(context),
             child: FloatingAddButton(
               semanticLabel: '新建周期',
               onPressed: () => openPeriodicEdit(context),

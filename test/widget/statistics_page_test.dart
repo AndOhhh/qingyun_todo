@@ -64,9 +64,10 @@ void main() {
     );
     await store.tasks.insert(Todo(title: '未完成', remindDate: today));
     await store.tasks.toggleComplete(doneId, to: true);
-    // 逾期 1 条
+    // 逾期 1 条：固定放在「上周末」，确保落在本周区间之外（避免日期敏感）
+    final monday = DateUtil.addDays(today, -((today.weekday - 1) % 7));
     await store.tasks.insert(
-      Todo(title: '逾期', remindDate: DateUtil.addDays(today, -2)),
+      Todo(title: '逾期', remindDate: DateUtil.addDays(monday, -1)),
     );
     // 孤儿周期已完成实例 → 计入 M6（100%）
     final db = await store.db.database;

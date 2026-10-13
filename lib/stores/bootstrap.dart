@@ -32,6 +32,7 @@ Future<void> bootstrapApp(WidgetRef ref) async {
     final notify = ref.read(notificationServiceProvider);
     await notify.init();
     await notify.reconcile();
+    await notify.startForegroundWatch();
   } catch (error, stack) {
     debugPrint('[bootstrap] 周期实例生成失败，将在下次触发时重试：$error');
     debugPrintStack(stackTrace: stack);

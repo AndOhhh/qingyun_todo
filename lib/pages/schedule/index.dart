@@ -191,12 +191,12 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
           // 两个按钮尺寸统一为 56
           Positioned(
             right: 16,
-            bottom: 164,
+            bottom: floatingBottomOffset(context, base: 164),
             child: _TodayFab(onTap: _jumpToday),
           ),
           Positioned(
             right: 16,
-            bottom: 96,
+            bottom: floatingBottomOffset(context),
             child: FloatingAddButton(
               semanticLabel: '新建待办（预填选中日期）',
               onPressed: () => openTodoEdit(context, initialDate: _selected),

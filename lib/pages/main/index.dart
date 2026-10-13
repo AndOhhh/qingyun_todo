@@ -72,8 +72,16 @@ class _MainPageState extends ConsumerState<MainPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
       recalibrateIfDayChanged(ref);
-      // 回前台重排通知：覆盖「App 被杀期间改过数据 / 系统重启丢失排期」等场景
-      ref.read(notificationServiceProvider).reconcile();
+      // 回前台：重排 OS 通知 + 启动前台兜底巡检
+      final service = ref.read(notificationServiceProvider);
+      service
+        ..reconcile()
+        ..startForegroundWatch();
+    } else if (state == AppLifecycleState.paused && mounted) {
+      // 进后台：停止兜底巡检，把提醒交还给 OS 排期
+      final service = ref.read(notificationServiceProvider);
+      service.stopForegroundWatch();
+      service.reconcile();
     }
   }
 
