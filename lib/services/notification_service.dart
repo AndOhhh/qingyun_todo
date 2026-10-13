@@ -158,14 +158,18 @@ class NotificationService {
   /// 丢弃非精确闹钟，导致「App 还活着也不响」；App 存活期间改由本计时器到点发通知。
   static const Duration kNetInterval = Duration(seconds: 15);
 
-  /// 距到期小于该窗口的任务：收回 OS 排期，改由前台兜底接管（避免双发）
-  static const Duration kPreemptWindow = Duration(seconds: 90);
+  /// 到期后等待 OS 闹钟的宽限期：超过仍未触发（且排期仍在）才判定为被 ROM 丢弃
+  static const Duration kDropGrace = Duration(seconds: 60);
 
   /// 已到期但尚未发出的任务，超过该时长不再补（视为过期噪音）
   static const Duration kLateWindow = Duration(minutes: 5);
 
   Timer? _netTimer;
   final Set<int> _shownThisSession = <int>{};
+
+  /// 本进程内排期成功的任务 id：到期后若排期消失 = OS 已送达（不再补发）；
+  /// 若从未排期成功（排期异常）= 必须由前台补发
+  final Set<int> _armedIds = <int>{};
 
   /// 开始前台兜底（resume / 启动时调用）
   Future<void> startForegroundWatch() async {
@@ -190,14 +194,15 @@ class NotificationService {
       final tasks = await _tasks.queryRemindable();
       final pending = await _plugin.pendingNotificationRequests();
       final pendingIds = pending.map((p) => p.id).toSet();
-      for (final id in computeForegroundPlan(
+      final plan = computeForegroundPlan(
         tasks: tasks,
         pendingIds: pendingIds,
-        shownIds: const <int>{},
+        shownIds: _shownThisSession,
+        armedIds: _armedIds,
         now: now,
-      ).assumeDelivered) {
-        _shownThisSession.add(id);
-      }
+        seeding: true,
+      );
+      _shownThisSession.addAll(plan.assumeDelivered);
     } catch (error) {
       debugPrint('[notify] 前台兜底初始化失败：$error');
     }
@@ -214,11 +219,14 @@ class NotificationService {
         tasks: tasks,
         pendingIds: pendingIds,
         shownIds: _shownThisSession,
+        armedIds: _armedIds,
         now: now,
       );
       for (final id in plan.toCancel) {
         await _plugin.cancel(id: id);
       }
+      // OS 已送达的静默去重，不补发
+      _shownThisSession.addAll(plan.toMarkShown);
       for (final task in plan.toShow) {
         await _showNow(task);
         _shownThisSession.add(task.id!);
@@ -228,55 +236,6 @@ class NotificationService {
       _lastError = '$error';
       debugPrint('[notify] 前台兜底巡检失败：$error');
     }
-  }
-
-  /// 前台兜底决策（**纯函数**，单测覆盖）：
-  /// - [toCancel]：即将到期（<=90s）或已到期待补发的 OS 排期，收回以免双发；
-  /// - [toShow]：已到期、本会话未发过、且在 5 分钟补发窗内的任务；
-  /// - [assumeDelivered]：已到期且 OS 排期已消失（= 后台已由 OS 送达）的任务，
-  ///   供启动时播种 [_shownThisSession]。
-  /// [seeding] = true 表示启动/回前台的播种趟（只标记「后台已送达」，不补发）；
-  /// false 表示周期巡检趟（到期未发必须补发）
-  static ForegroundPlan computeForegroundPlan({
-    required List<Todo> tasks,
-    required Set<int> pendingIds,
-    required Set<int> shownIds,
-    required DateTime now,
-    bool seeding = false,
-    Duration preemptWindow = kPreemptWindow,
-    Duration lateWindow = kLateWindow,
-  }) {
-    final toShow = <Todo>[];
-    final toCancel = <int>[];
-    final assumeDelivered = <int>[];
-    for (final task in tasks) {
-      final due = task.remindAt;
-      final id = task.id;
-      if (due == null || id == null) continue;
-      final delta = due.difference(now);
-      final isPending = pendingIds.contains(id);
-      if (!delta.isNegative && delta <= preemptWindow) {
-        // 即将到期：前台接管，收回 OS 排期
-        if (isPending) toCancel.add(id);
-      } else if (delta.isNegative && delta >= -lateWindow) {
-        if (shownIds.contains(id)) continue;
-        if (seeding && !isPending) {
-          // 仅播种趟：OS 排期已消失 = 后台大概率由 OS 送达过，记为已送达防双发
-          assumeDelivered.add(id);
-          continue;
-        }
-        // 巡检趟：已到期且本会话没发过 → 必须由前台补发。
-        // 注意：此时 isPending 通常为 false（90s 前已被我们收回），
-        // 绝不能把它当成「已送达」，否则兜底永远发不出去（一加13 实测踩坑）
-        toShow.add(task);
-        if (isPending) toCancel.add(id);
-      }
-    }
-    return ForegroundPlan(
-      toShow: toShow,
-      toCancel: toCancel,
-      assumeDelivered: assumeDelivered,
-    );
   }
 
   /// 同步计划（**纯函数**，单测覆盖）：
@@ -312,7 +271,68 @@ class NotificationService {
     );
   }
 
-  // ------------------------------------------------------------ 发送
+  /// 前台兜底决策（**纯函数**，单测覆盖）。
+  ///
+  /// 原则（吸取一加 13 回归教训）：**OS 排期是主通道，巡检只修丢单，
+  /// 绝不提前收回排期**——收回会把「系统准时发」降级成「轮询补发」，
+  /// 屏幕熄灭 / ROM 冻结计时器时反而更不准。
+  ///
+  /// - 到期前：一律不动（交给 OS）；
+  /// - 到期后 [kDropGrace] 内：等待 OS 触发，不补发；
+  /// - 到期后超宽限且排期仍在：判定被 ROM 丢弃 → 补发并收回；
+  /// - 到期后排期已消失：若本进程排期成功过 = OS 已送达（静默记为已发）；
+  ///   若从未排期成功 = 排期异常遗漏 → 补发；
+  /// - 播种趟（[seeding]）：只把「到期 + 排期消失 + 未发过」记为已送达，
+  ///   防止后台由 OS 发过的提醒在回前台时被补发成双条。
+  static ForegroundPlan computeForegroundPlan({
+    required List<Todo> tasks,
+    required Set<int> pendingIds,
+    required Set<int> shownIds,
+    required Set<int> armedIds,
+    required DateTime now,
+    bool seeding = false,
+    Duration dropGrace = kDropGrace,
+    Duration lateWindow = kLateWindow,
+  }) {
+    final toShow = <Todo>[];
+    final toCancel = <int>[];
+    final toMarkShown = <int>[];
+    final assumeDelivered = <int>[];
+    for (final task in tasks) {
+      final due = task.remindAt;
+      final id = task.id;
+      if (due == null || id == null) continue;
+      final overdue = now.difference(due);
+      if (overdue.isNegative) continue; // 未到期：OS 主通道，巡检不插手
+      if (overdue > lateWindow) continue; // 过期噪音：不补
+      if (shownIds.contains(id)) continue;
+      final isPending = pendingIds.contains(id);
+
+      if (seeding) {
+        if (!isPending) assumeDelivered.add(id);
+        continue;
+      }
+      if (isPending) {
+        // 排期还在：宽限期内等 OS；超宽限 = 被 ROM 丢弃 → 补发并收回
+        if (overdue > dropGrace) {
+          toShow.add(task);
+          toCancel.add(id);
+        }
+      } else if (armedIds.contains(id)) {
+        // 排期消失且本进程排期成功过 = OS 已送达，静默去重
+        toMarkShown.add(id);
+      } else {
+        // 从未排期成功（精确被拒且降级也失败等）→ 前台补发
+        toShow.add(task);
+      }
+    }
+    return ForegroundPlan(
+      toShow: toShow,
+      toCancel: toCancel,
+      toMarkShown: toMarkShown,
+      assumeDelivered: assumeDelivered,
+    );
+  }
 
   Future<void> _schedule(Todo task) async {
     final due = task.remindAt!;
@@ -345,6 +365,7 @@ class NotificationService {
         notificationDetails: _details,
       );
     }
+    _armedIds.add(task.id!);
     // 排期成功即视为「已交给系统」，防止补发逻辑重复提醒
     await _tasks.markNotified(task.id!);
   }
@@ -516,18 +537,22 @@ class NotificationHealth {
 
 /// [NotificationService.computeForegroundPlan] 的结果
 class ForegroundPlan {
-  /// 需要立即补发的任务
+  /// 需要立即补发的任务（OS 丢单 / 从未排期成功）
   final List<Todo> toShow;
 
-  /// 需要收回的 OS 排期 id
+  /// 需要收回的 OS 排期 id（仅丢单补发时）
   final List<int> toCancel;
 
-  /// 视为「后台已送达」的任务 id（启动时播种去重集合）
+  /// OS 已送达、只需静默去重的任务 id
+  final List<int> toMarkShown;
+
+  /// 播种趟：视为「后台已送达」的任务 id
   final List<int> assumeDelivered;
 
   const ForegroundPlan({
     required this.toShow,
     required this.toCancel,
+    required this.toMarkShown,
     required this.assumeDelivered,
   });
 }

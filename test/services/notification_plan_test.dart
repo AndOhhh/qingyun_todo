@@ -157,119 +157,110 @@ void main() {
     });
   });
 
-  group('前台兜底决策 computeForegroundPlan', () {
-    Todo due({required int id, required DateTime at, bool notified = true}) {
+  group('前台兜底决策 computeForegroundPlan（OS 为主，巡检只修丢单）', () {
+    Todo due({required int id, required DateTime at}) {
       return Todo(
         id: id,
         title: 't$id',
         remindDate: DateUtil.dateOnly(at),
         remindTime: DateUtil.formatTime(at),
-        isNotified: notified,
+        isNotified: true,
         createdAt: now,
         updatedAt: now,
       );
     }
 
-    test('即将到期（<=90s）且 OS 已排期 → 收回排期，由前台接管', () {
+    test('未到期（哪怕只剩 30s）→ 不动 OS 排期，不补发', () {
       final soon = due(id: 1, at: now.add(const Duration(seconds: 30)));
       final plan = NotificationService.computeForegroundPlan(
         tasks: <Todo>[soon],
         pendingIds: <int>{1},
         shownIds: const <int>{},
+        armedIds: <int>{1},
         now: now,
       );
-      expect(plan.toCancel, <int>[1]);
       expect(plan.toShow, isEmpty);
-      expect(plan.assumeDelivered, isEmpty);
+      expect(plan.toCancel, isEmpty);
+      expect(plan.toMarkShown, isEmpty);
     });
 
-    test('已到期 + 本会话未发 + OS 排期仍在（闹钟被 ROM 丢弃）→ 补发并收回', () {
-      final late = due(id: 2, at: now.subtract(const Duration(seconds: 40)));
+    test('到期 30s（宽限内）+ 排期仍在 → 等 OS，不补发', () {
+      final t = due(id: 2, at: now.subtract(const Duration(seconds: 30)));
       final plan = NotificationService.computeForegroundPlan(
-        tasks: <Todo>[late],
+        tasks: <Todo>[t],
         pendingIds: <int>{2},
         shownIds: const <int>{},
+        armedIds: <int>{2},
         now: now,
       );
-      expect(plan.toShow.map((t) => t.id), <int>[2]);
-      expect(plan.toCancel, <int>[2]);
-      expect(plan.assumeDelivered, isEmpty);
+      expect(plan.toShow, isEmpty);
+      expect(plan.toCancel, isEmpty);
     });
 
-    test('播种趟：已到期 + OS 排期消失（后台已送达）→ 记为已送达，不补发', () {
-      final delivered = due(id: 3, at: now.subtract(const Duration(seconds: 40)));
+    test('到期 90s（超宽限）+ 排期仍在 = 被 ROM 丢弃 → 补发并收回', () {
+      final t = due(id: 3, at: now.subtract(const Duration(seconds: 90)));
       final plan = NotificationService.computeForegroundPlan(
-        tasks: <Todo>[delivered],
+        tasks: <Todo>[t],
+        pendingIds: <int>{3},
+        shownIds: const <int>{},
+        armedIds: <int>{3},
+        now: now,
+      );
+      expect(plan.toShow.map((e) => e.id), <int>[3]);
+      expect(plan.toCancel, <int>[3]);
+    });
+
+    test('到期 + 排期消失 + 本进程排期成功过 = OS 已送达 → 静默去重', () {
+      final t = due(id: 4, at: now.subtract(const Duration(seconds: 20)));
+      final plan = NotificationService.computeForegroundPlan(
+        tasks: <Todo>[t],
         pendingIds: const <int>{},
         shownIds: const <int>{},
+        armedIds: <int>{4},
+        now: now,
+      );
+      expect(plan.toShow, isEmpty);
+      expect(plan.toMarkShown, <int>[4]);
+    });
+
+    test('到期 + 排期消失 + 从未排期成功 = 排期异常遗漏 → 前台补发', () {
+      final t = due(id: 5, at: now.subtract(const Duration(seconds: 20)));
+      final plan = NotificationService.computeForegroundPlan(
+        tasks: <Todo>[t],
+        pendingIds: const <int>{},
+        shownIds: const <int>{},
+        armedIds: const <int>{},
+        now: now,
+      );
+      expect(plan.toShow.map((e) => e.id), <int>[5]);
+      expect(plan.toMarkShown, isEmpty);
+    });
+
+    test('本会话已发过 → 跳过；到期超 5 分钟 → 不补', () {
+      final shown = due(id: 6, at: now.subtract(const Duration(seconds: 20)));
+      final stale = due(id: 7, at: now.subtract(const Duration(minutes: 6)));
+      final plan = NotificationService.computeForegroundPlan(
+        tasks: <Todo>[shown, stale],
+        pendingIds: const <int>{},
+        shownIds: const <int>{6},
+        armedIds: const <int>{},
+        now: now,
+      );
+      expect(plan.toShow, isEmpty);
+    });
+
+    test('播种趟：到期+排期消失 → 记为后台已送达；到期+排期仍在 → 留给巡检', () {
+      final delivered = due(id: 8, at: now.subtract(const Duration(seconds: 40)));
+      final stillPending = due(id: 9, at: now.subtract(const Duration(seconds: 40)));
+      final plan = NotificationService.computeForegroundPlan(
+        tasks: <Todo>[delivered, stillPending],
+        pendingIds: <int>{9},
+        shownIds: const <int>{},
+        armedIds: const <int>{},
         now: now,
         seeding: true,
       );
-      expect(plan.toShow, isEmpty);
-      expect(plan.assumeDelivered, <int>[3]);
-    });
-
-    test('巡检趟回归（一加13 踩坑）：到期前已被收回排期 → 到期必须补发', () {
-      // 90s 前置接管把 OS 排期 cancel 掉了，于是到期时 isPending=false；
-      // 旧实现误判为「后台已送达」导致前台永远不响
-      final preempted = due(id: 7, at: now.subtract(const Duration(seconds: 10)));
-      final plan = NotificationService.computeForegroundPlan(
-        tasks: <Todo>[preempted],
-        pendingIds: const <int>{},
-        shownIds: const <int>{},
-        now: now,
-      );
-      expect(plan.toShow.map((t) => t.id), <int>[7]);
-      expect(plan.toCancel, isEmpty);
-      expect(plan.assumeDelivered, isEmpty);
-    });
-
-    test('播种趟：已到期但 OS 排期仍在（后台被 ROM 丢弃）→ 补发并收回', () {
-      final dropped = due(id: 8, at: now.subtract(const Duration(seconds: 30)));
-      final plan = NotificationService.computeForegroundPlan(
-        tasks: <Todo>[dropped],
-        pendingIds: <int>{8},
-        shownIds: const <int>{},
-        now: now,
-        seeding: true,
-      );
-      expect(plan.toShow.map((t) => t.id), <int>[8]);
-      expect(plan.toCancel, <int>[8]);
-      expect(plan.assumeDelivered, isEmpty);
-    });
-
-    test('本会话已发过 → 跳过，防双发', () {
-      final shown = due(id: 4, at: now.subtract(const Duration(seconds: 40)));
-      final plan = NotificationService.computeForegroundPlan(
-        tasks: <Todo>[shown],
-        pendingIds: <int>{4},
-        shownIds: const <int>{4},
-        now: now,
-      );
-      expect(plan.toShow, isEmpty);
-      expect(plan.toCancel, isEmpty);
-    });
-
-    test('到期超过 5 分钟 → 不补发（过期噪音）', () {
-      final stale = due(id: 5, at: now.subtract(const Duration(minutes: 6)));
-      final plan = NotificationService.computeForegroundPlan(
-        tasks: <Todo>[stale],
-        pendingIds: <int>{5},
-        shownIds: const <int>{},
-        now: now,
-      );
-      expect(plan.toShow, isEmpty);
-    });
-
-    test('距到期 > 90s → 不动 OS 排期', () {
-      final far = due(id: 6, at: now.add(const Duration(minutes: 10)));
-      final plan = NotificationService.computeForegroundPlan(
-        tasks: <Todo>[far],
-        pendingIds: <int>{6},
-        shownIds: const <int>{},
-        now: now,
-      );
-      expect(plan.toCancel, isEmpty);
+      expect(plan.assumeDelivered, <int>[8]);
       expect(plan.toShow, isEmpty);
     });
   });
