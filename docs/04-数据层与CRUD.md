@@ -155,40 +155,43 @@ lib/
 ## 5. 周期实例生成算法
 
 ```
-generatePeriodicInstances(DateTime from, DateTime to)      // 滚动生成，App 启动 + 跨日触发
+ensureCurrentCycleInstances(today)          // 一轮一期（N13）：App 启动 + 跨日 + 新建/修改 + 本轮完结时触发
   for each periodic in periodicRepository.queryAll(onlyActive: true):
-      if periodic.endDate != null && periodic.endDate < from: continue
+      if periodic.endDate != null && periodic.endDate < today: continue
       rule = CycleRule(periodic.intervalType, periodic.intervalValue, periodic.startDate)
-      kStart = max(0, 首个使 rule.cycleStart(k) + maxDayOffset >= from 的 k)
-      for k = kStart … while rule.cycleStart(k) <= to:
-          cycleStart = rule.cycleStart(k)
-          cycleLen   = rule.cycleLength(k)
-          for each item in periodicItemRepository.queryByPeriodicId(periodic.id):
-              if item.dayOffset >= cycleLen: continue          // 短月份跳过（§7.2）
-              remindDate = cycleStart + item.dayOffset 天
-              if remindDate < from || remindDate > to: continue
-              if periodic.endDate != null && remindDate > periodic.endDate: break
-              insertIgnore(Task(                                // ON CONFLICT DO NOTHING
-                  title: item.title, remark: item.remark,
-                  remind_date: remindDate, remind_time: item.remindTime,
-                  priority: item.priority, accent_color: item.accentColor,
-                  source_type: 'PERIODIC', periodic_id: periodic.id,
-                  periodic_item_id: item.id, cycle_index: k,
-                  periodic_name_snapshot: periodic.name))       // 名称快照，供周期删除后展示
+      kCur = PeriodicRoundPolicy.currentRound(rule, instancesOf(periodic), today)
+             // 最早的未完成轮；该轮窗口已整轮走完 → 顺延到「今天所在轮」；
+             // 全部完结 / 无实例 → max(今天所在轮, 已有最大轮次 + 1)
+      cycleStart = rule.cycleStart(kCur)
+      cycleLen   = rule.cycleLength(kCur)
+      for each item in periodicItemRepository.queryByPeriodicId(periodic.id):
+          if item.dayOffset >= cycleLen: continue           // 短月份跳过（§7.2）
+          remindDate = cycleStart + item.dayOffset 天
+          if remindDate < today: continue                   // 不补生成历史（Q1）
+          if periodic.endDate != null && remindDate > periodic.endDate: continue
+          insertIgnore(Task(                                // ON CONFLICT DO NOTHING
+              title: item.title, remark: item.remark,
+              remind_date: remindDate, remind_time: item.remindTime,
+              priority: item.priority, accent_color: item.accentColor,
+              source_type: 'PERIODIC', periodic_id: periodic.id,
+              periodic_item_id: item.id, cycle_index: kCur,
+              periodic_name_snapshot: periodic.name))       // 名称快照，供周期删除后展示
+      deletePending(cycle_index > kCur)                     // 旧口径遗留的未来未完成轮次清理
 ```
 
 | 要点 | 说明 |
 | :-- | :-- |
 | 幂等 | `INSERT … ON CONFLICT(periodic_item_id, cycle_index) DO NOTHING` + 唯一索引，重复调用无副作用 |
 | **墓碑跳过** | 生成前先取回 `periodic_skips` 中该周期的全部 `(周期项, 轮次)` 键，命中则跳过：硬删除的实例不会被写回（schema v2.2 / docs/02 §4.4）。撤销删除时清除墓碑 |
-| **下一轮生成** | `generateCycle(periodicId, k)` **不受 30 天窗口限制**，否则长周期（每 40 天 / 每月 / 每年）永远等不到下一轮；仍遵守 `is_active`、`end_date`，且不补生成已过去的轮次 |
+| **一轮一期** | 只保证「本轮」实例存在，不再预生成未来 30 天：本轮未结束不推进；本轮完成（`PeriodicCompletion` → 下一轮）或整轮逾期（启动/跨日时顺延到「今天所在轮」）才推进。生成与**待办页展示**共用 `PeriodicRoundPolicy`，避免两边口径不一致 |
+| **旧口径遗留** | 晚于本轮的未完成实例在生成时删除；早于本轮的未完成实例（错过的那一轮）**保留在库中**，仅不进入待办页（日程页/统计口径不变，非破坏性） |
 | **轮次计数** | `CycleCounter.sync` 绝对重算「拥有 ≥1 条实例且无未完成实例」的轮数，替代 `±1` 增减；一个实现同时满足 TC-08/09/10 |
-| 预生成窗口 | 默认 `今天 → 今天 + 30 天`，常量集中定义 |
+| 预生成口径 | **一轮一期**：只保证每个周期「本轮」实例存在（见上表），不再有 30 天窗口常量 |
 | 触发时机 | ① App 启动（`DbHelper` 就绪后）② 新建/修改周期或周期项后 ③ 完成一轮后生成下一轮 ④ 跨日（定时器或页面 resume 时校验） |
 | 历史实例 | 默认**不补生成**过去日期（Q1） |
 | 名称快照 | 生成时写入 `periodic_name_snapshot`，之后周期改名**不回写**已有实例（保持历史真实） |
-| 轮次完结 | `onInstanceCompleted` 判定该轮未完成数为 0 → `completed_count += 1`；手动删除的实例不参与判定 |
-| 性能 | 全部写入包在一个事务里；30 天窗口 × 数十周期 × 数项 ≈ 百级行 |
+| 轮次完结 | `onInstanceCompleted` 判定该轮未完成数为 0 → `completed_count += 1` → 对齐下一轮；手动删除的实例不参与判定 |
+| 性能 | 全部写入包在一个事务里；每次只写一轮 × 数项 ≈ 十级行 |
 | 异常 | 生成失败不得阻塞 UI：捕获异常 + 日志，下次触发时重试（幂等保证安全） |
 
 ---

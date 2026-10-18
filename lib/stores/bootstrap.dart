@@ -22,7 +22,7 @@ Future<void> bootstrapApp(WidgetRef ref) async {
     bindNotificationNavigation();
     await ref.read(databaseProvider.future);
     final inserted =
-        await ref.read(periodicGeneratorProvider).generateForWindow();
+        await ref.read(periodicGeneratorProvider).generateCurrentRounds();
     ref.read(lastCalibratedDateProvider.notifier).state =
         DateUtil.formatDate(DateUtil.today());
     if (inserted > 0) {

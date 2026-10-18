@@ -37,8 +37,8 @@ class PeriodicCompletion {
       final cycleFinished = regenerate && await _isCycleFinished(e, periodicId, cycleIndex);
       await CycleCounter.sync(e, periodicId);
       if (cycleFinished) {
-        // 本轮完结 → 生成下一轮（FR-15 / TC-08）。幂等：已存在则不重复写入
-        await _generator.generateCycle(periodicId, cycleIndex + 1, executor: e);
+        // 本轮完结 → 对齐到下一轮（一轮一期：只生成当前轮，FR-15 / TC-08）
+        await _generator.generateForPeriodicId(periodicId, executor: e);
       }
     }
 

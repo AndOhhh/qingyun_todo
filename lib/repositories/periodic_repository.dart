@@ -85,16 +85,29 @@ class PeriodicRepository {
     }
     final db = await _db;
     return db.transaction<int>((txn) async {
+      final previous = await findById(id, executor: txn);
       final affected = await txn.update(
         Periodic.table,
         periodic.copyWith(updatedAt: DateTime.now()).toMap(),
         where: 'id = ?',
         whereArgs: <Object?>[id],
       );
-      await generator.regenerateAndSync(id, executor: txn);
+      if (previous != null && _ruleChanged(previous, periodic)) {
+        // 起始日 / 间隔变了：旧待办计划作废，按新规则重建（N14）
+        await generator.rebuildPending(id, executor: txn);
+      } else {
+        await generator.regenerateAndSync(id, executor: txn);
+      }
       return affected;
     });
   }
+
+  /// 起始日 / 间隔是否变化（决定要不要重建未完成计划，见 N14）
+  static bool _ruleChanged(Periodic before, Periodic after) =>
+      DateUtil.formatDate(before.startDate) !=
+          DateUtil.formatDate(after.startDate) ||
+      before.intervalType != after.intervalType ||
+      before.intervalValue != after.intervalValue;
 
   /// 启停周期（FR-14）：暂停后停止生成新实例，已有实例保留；
   /// 重新启用时补生成当前窗口内的实例。

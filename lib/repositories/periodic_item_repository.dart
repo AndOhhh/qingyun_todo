@@ -67,7 +67,10 @@ class PeriodicItemRepository {
     });
   }
 
-  /// 更新周期项（同 [insert] 的天序校验）；已生成实例保持不变（Q8）
+  /// 更新周期项（同 [insert] 的天序校验）。
+  ///
+  /// 天序 / 提醒时间属于「日期类」变更：该事项的未完成实例按新值重建（N14）；
+  /// 其余内容（标题 / 备注 / 优先级 / 色带）仍遵守不追溯（Q8）。
   Future<int> update(PeriodicItem item) async {
     final id = item.id;
     final periodicId = item.periodicId;
@@ -81,13 +84,25 @@ class PeriodicItemRepository {
     return db.transaction<int>((txn) async {
       final rule = await _requireRule(txn, periodicId);
       validateDayOffset(item.dayOffset, rule, title: item.title);
+      final previous = await findById(id, executor: txn);
       final affected = await txn.update(
         PeriodicItem.table,
         item.copyWith(updatedAt: DateTime.now()).toMap(),
         where: 'id = ?',
         whereArgs: <Object?>[id],
       );
-      await generator.regenerateAndSync(periodicId, executor: txn);
+      final dated = previous != null &&
+          (previous.dayOffset != item.dayOffset ||
+              previous.remindTime != item.remindTime);
+      if (dated) {
+        await generator.rebuildPending(
+          periodicId,
+          onlyItemId: id,
+          executor: txn,
+        );
+      } else {
+        await generator.regenerateAndSync(periodicId, executor: txn);
+      }
       return affected;
     });
   }

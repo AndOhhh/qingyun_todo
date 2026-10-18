@@ -58,8 +58,36 @@ void main() {
     return list;
   }
 
+  /// 手工写入一条「旧口径遗留」实例（绕过生成引擎，用于迁移与展示口径测试）
+  Future<void> insertLegacyInstance({
+    required int periodicId,
+    required int itemId,
+    required int cycleIndex,
+    required DateTime date,
+    bool completed = false,
+    String title = '打卡',
+  }) async {
+    final db = await store.db.database;
+    final now = DateUtil.formatTimestamp(DateTime.now());
+    await db.insert('tasks', <String, Object?>{
+      'title': title,
+      'remind_date': DateUtil.formatDate(date),
+      'is_completed': completed ? 1 : 0,
+      'completed_at': completed ? now : null,
+      'source_type': 'PERIODIC',
+      'periodic_id': periodicId,
+      'periodic_item_id': itemId,
+      'cycle_index': cycleIndex,
+      'periodic_name_snapshot': '测试周期',
+      'sort_order': 0,
+      'is_notified': 0,
+      'created_at': now,
+      'updated_at': now,
+    });
+  }
+
   group('生成引擎 · 基本规则', () {
-    test('TC-01：每 2 天 + 第 1 天喝牛奶 / 第 2 天喝豆浆，日期序列与 docs/01 §4.4 一致', () async {
+    test('TC-01：每 2 天 + 第 1 天喝牛奶 / 第 2 天喝豆浆，只生成本轮（一轮一期）', () async {
       final id = await store.periodics.insert(
         buildPeriodic(name: '隔天喝饮品计划', value: 2),
         items: <PeriodicItem>[
@@ -68,22 +96,19 @@ void main() {
         ],
       );
       final instances = await instancesOf(id);
-      // 窗口 = 今天 ~ 今天+30（含端点共 31 天）；每 2 天一轮 → 16 轮，
-      // 第 16 轮的第 2 天（+31）超出窗口，故 16 × 2 - 1 = 31 条
-      expect(instances.length, 31);
-      final head = instances.take(4).toList();
+      // 一轮一期（N13）：只生成「今天所在轮」，不再一次铺满 30 天窗口
+      expect(instances.length, 2);
+      final head = instances;
       expect(
         head.map((t) => '${DateUtil.formatDate(t.remindDate)} ${t.title}'),
         <String>[
           '${DateUtil.formatDate(today)} 喝牛奶',
           '${DateUtil.formatDate(DateUtil.addDays(today, 1))} 喝豆浆',
-          '${DateUtil.formatDate(DateUtil.addDays(today, 2))} 喝牛奶',
-          '${DateUtil.formatDate(DateUtil.addDays(today, 3))} 喝豆浆',
         ],
       );
-      // 轮次与来源信息完整，快照名写入
+      // 同一轮：两条实例的 cycleIndex 必须一致
       expect(head[0].cycleIndex, 0);
-      expect(head[2].cycleIndex, 1);
+      expect(head[1].cycleIndex, 0);
       expect(head[0].sourceType, TaskSourceType.periodic);
       expect(head[0].periodicNameSnapshot, '隔天喝饮品计划');
       expect(head[0].isPeriodic, isTrue);
@@ -91,14 +116,31 @@ void main() {
       expect(head[0].remindTime, '09:00');
     });
 
-    test('TC-07：同一窗口连续触发两次，实例行数不变（幂等）', () async {
+    test('一轮一期：连续触发多次不会生成后续轮次', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(value: 2),
+        items: <PeriodicItem>[buildItem(dayOffset: 0)],
+      );
+      expect((await instancesOf(id)).length, 1);
+      // 同一天反复触发：本轮未完成就不推进任何轮次
+      await store.generator.generateCurrentRounds();
+      await store.generator.generateForPeriodicId(id);
+      await store.generator.generateCurrentRounds();
+      expect(
+        (await instancesOf(id)).length,
+        1,
+        reason: '本轮未完成前不生成任何后续轮次',
+      );
+    });
+
+    test('TC-07：同一口径连续触发两次，实例行数不变（幂等）', () async {
       final id = await store.periodics.insert(
         buildPeriodic(value: 3),
         items: <PeriodicItem>[buildItem(dayOffset: 0), buildItem(dayOffset: 2)],
       );
       final first = (await instancesOf(id)).length;
-      await store.generator.generateForWindow();
-      await store.generator.generateForWindow();
+      await store.generator.generateCurrentRounds();
+      await store.generator.generateCurrentRounds();
       await store.generator.generateForPeriodicId(id);
       expect((await instancesOf(id)).length, first);
     });
@@ -145,10 +187,26 @@ void main() {
         buildPeriodic(endDate: DateUtil.addDays(today, 2)),
         items: <PeriodicItem>[buildItem(dayOffset: 0)],
       );
-      final instances = await instancesOf(id);
-      expect(instances.length, 3); // today / +1 / +2
-      expect(DateUtil.formatDate(instances.last.remindDate),
-          DateUtil.formatDate(DateUtil.addDays(today, 2)));
+      // 一轮一期：先只生成今天这一轮
+      expect(await instancesOf(id), hasLength(1));
+
+      // 次日推进：本轮逾期 → 顺延生成「今天+1」那一轮
+      await store.generator.generateCurrentRounds(
+        today: DateUtil.addDays(today, 1),
+      );
+      var instances = await instancesOf(id);
+      expect(instances, hasLength(2));
+      expect(
+        DateUtil.formatDate(instances.last.remindDate),
+        DateUtil.formatDate(DateUtil.addDays(today, 1)),
+      );
+
+      // 越过终止日：整周期到期，不再生成
+      await store.generator.generateCurrentRounds(
+        today: DateUtil.addDays(today, 3),
+      );
+      instances = await instancesOf(id);
+      expect(instances, hasLength(2), reason: '终止日之后不再生成');
     });
 
     test('TC-21：暂停后不再生成新实例，已有实例保留；启用后恢复生成', () async {
@@ -157,31 +215,29 @@ void main() {
         items: <PeriodicItem>[buildItem(dayOffset: 0)],
       );
       final before = (await instancesOf(id)).length;
-      expect(before, greaterThan(0));
+      expect(before, 1);
 
       await store.periodics.setActive(id, false);
       expect((await store.periodics.findById(id))!.isActive, isFalse);
 
-      // 暂停期间即便把窗口拉长到 200 天，也一条都不生成；已有实例保留
+      // 暂停期间即便跨到下一轮，也一条都不生成；已有实例保留
       await store.generator.generateForPeriodicId(
         id,
-        from: today,
-        to: DateUtil.addDays(today, 200),
+        today: DateUtil.addDays(today, 2),
       );
       expect((await instancesOf(id)).length, before);
 
-      // 重新启用后恢复生成
+      // 重新启用后恢复生成（本轮已逾期 → 顺延到新一轮）
       await store.periodics.setActive(id, true);
       expect((await store.periodics.findById(id))!.isActive, isTrue);
       await store.generator.generateForPeriodicId(
         id,
-        from: today,
-        to: DateUtil.addDays(today, 200),
+        today: DateUtil.addDays(today, 2),
       );
       expect((await instancesOf(id)).length, greaterThan(before));
     });
 
-    test('TC-20 / Q8：修改规则不追溯已生成实例，新规则只对尚未生成的轮次生效', () async {
+    test('TC-20 / Q8：修改规则不追溯已生成实例，新规则从下一轮生效', () async {
       final id = await store.periodics.insert(
         buildPeriodic(value: 2),
         items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
@@ -191,31 +247,278 @@ void main() {
       final beforeDates = (await instancesOf(id))
           .map((t) => DateUtil.formatDate(t.remindDate))
           .toSet();
-      expect(beforeDates.contains(fmt(2)), isTrue);
+      expect(beforeDates, <String>{fmt(0)});
 
       final periodic = (await store.periodics.findById(id))!;
       await store.periodics.update(periodic.copyWith(intervalValue: 3));
 
-      // 已生成窗口内的实例日期**一条都没变**（不追溯）
+      // 已生成实例的日期**一条都没变**（不追溯）
       final afterDates = (await instancesOf(id))
           .map((t) => DateUtil.formatDate(t.remindDate))
           .toSet();
       expect(afterDates, beforeDates);
 
-      // 新规则从「尚未生成的轮次」开始生效：窗口拉长到 200 天后，
-      // 第 17 轮（index 16）起按每 3 天推进（+48 / +51 …），而不是每 2 天
-      await store.generator.generateForPeriodicId(
-        id,
-        from: today,
-        to: DateUtil.addDays(today, 200),
-      );
-      final extended = (await instancesOf(id))
+      // 本轮完成 → 下一轮按新规则（每 3 天）推算：今天+3，而不是今天+2
+      final only = (await instancesOf(id)).single;
+      await store.tasks.toggleComplete(only.id!, to: true);
+      final next = (await instancesOf(id))
           .map((t) => DateUtil.formatDate(t.remindDate))
           .toSet();
-      expect(extended.contains(fmt(2)), isTrue, reason: '旧实例保留');
-      expect(extended.contains(fmt(48)), isTrue, reason: 'DAY/3 的第 17 轮 = +48 天');
-      expect(extended.contains(fmt(51)), isTrue);
-      expect(extended.contains(fmt(50)), isFalse, reason: '不再是每 2 天');
+      expect(next.contains(fmt(0)), isTrue, reason: '旧实例保留');
+      expect(next.contains(fmt(3)), isTrue, reason: 'DAY/3 的下一轮 = +3 天');
+      expect(next.contains(fmt(2)), isFalse, reason: '不再按每 2 天推进');
+    });
+  });
+
+  group('一轮一期（N13）：生成与展示口径', () {
+    test('改间隔后加项：计划按新规则重建，今天显示新规则下该做的那一项（用户实测场景）', () async {
+      // 1) 先用「每天」建周期（起始昨天）+ 豆浆（第 1 天）→ 旧编号把它放在第 1 轮
+      final id = await store.periodics.insert(
+        buildPeriodic(startDate: DateUtil.addDays(today, -1), value: 1),
+        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '豆浆')],
+      );
+      var instances = await instancesOf(id);
+      expect(instances.single.cycleIndex, 1, reason: '每天：今天所在轮是第 1 轮');
+      expect(
+        DateUtil.formatDate(instances.single.remindDate),
+        DateUtil.formatDate(today),
+      );
+
+      // 2) 改成「每 2 天」→ 未完成计划按新规则重建：第 0 轮 = 昨天 ~ 今天，
+      //    豆浆落在昨天（早于今天不补生成），旧编号实例被清理
+      final periodic = (await store.periodics.findById(id))!;
+      await store.periodics.update(periodic.copyWith(intervalValue: 2));
+      expect(await instancesOf(id), isEmpty);
+
+      // 3) 加「胡辣汤」（第 2 天）→ 落在今天、第 0 轮（正是用户期望的结果）
+      await store.items.insert(
+        buildItem(dayOffset: 1, title: '胡辣汤').copyWith(periodicId: id),
+      );
+      instances = await instancesOf(id);
+      expect(instances, hasLength(1));
+      expect(instances.single.title, '胡辣汤');
+      expect(instances.single.cycleIndex, 0);
+      expect(
+        DateUtil.formatDate(instances.single.remindDate),
+        DateUtil.formatDate(today),
+      );
+    });
+
+    test('改起始日 → 未完成计划重建，已完成实例保留为历史', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(value: 2),
+        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+      );
+      final done = (await instancesOf(id)).single;
+      await store.tasks.toggleComplete(done.id!, to: true);
+      // 本轮完成 → 生成下一轮（+2）
+      expect(await instancesOf(id), hasLength(2));
+
+      // 起始日往前挪一天：今天所在轮变为第 0 轮（含今天）
+      final periodic = (await store.periodics.findById(id))!;
+      await store.periodics.update(
+        periodic.copyWith(startDate: DateUtil.addDays(today, -1)),
+      );
+
+      final instances = await instancesOf(id);
+      // 已完成那条原样保留；未完成的旧编号实例被清理，
+      // 计划顺延到「第 0 轮已完成」之后的下一轮（不补生成过去的日期）
+      expect(instances.any((t) => t.id == done.id && t.isCompleted), isTrue);
+      final pending = instances.where((t) => !t.isCompleted).toList();
+      expect(pending, hasLength(1));
+      expect(pending.single.cycleIndex, 1, reason: '第 0 轮已整体完成 → 计划顺延');
+      expect(
+        DateUtil.formatDate(pending.single.remindDate),
+        DateUtil.formatDate(DateUtil.addDays(today, 1)),
+        reason: '新规则第 1 轮 = 明天起（昨天/今天不补生成）',
+      );
+    });
+
+    test('事项改天序 → 该事项未完成实例按新天序重建，其余事项不受影响', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(value: 2),
+        items: <PeriodicItem>[
+          buildItem(dayOffset: 0, title: '豆浆'),
+          buildItem(dayOffset: 1, title: '胡辣汤'),
+        ],
+      );
+      final instances = await instancesOf(id);
+      final keep = instances.firstWhere((t) => t.title == '豆浆');
+      var target = instances.firstWhere((t) => t.title == '胡辣汤');
+      expect(
+        DateUtil.formatDate(target.remindDate),
+        DateUtil.formatDate(DateUtil.addDays(today, 1)),
+      );
+
+      // 把「胡辣汤」从天 2 改到天 1
+      final item = (await store.items.findById(target.periodicItemId!))!;
+      await store.items.update(item.copyWith(dayOffset: 0));
+
+      final after = await instancesOf(id);
+      expect(after.any((t) => t.id == keep.id), isTrue, reason: '豆浆实例不追溯');
+      target = after.firstWhere((t) => t.title == '胡辣汤');
+      expect(
+        DateUtil.formatDate(target.remindDate),
+        DateUtil.formatDate(today),
+        reason: '胡辣汤按新天序落在今天',
+      );
+      expect(target.cycleIndex, 0);
+    });
+    test('完成本轮最后一项 → 生成下一轮，且未完成轮次有且只有一轮', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(value: 2),
+        items: <PeriodicItem>[
+          buildItem(dayOffset: 0, title: '第 1 天'),
+          buildItem(dayOffset: 1, title: '第 2 天'),
+        ],
+      );
+      var instances = await instancesOf(id);
+      expect(instances.map((t) => t.cycleIndex).toSet(), <int>{0});
+
+      // 只完成第 1 项：本轮未结束 → 不生成下一轮
+      await store.tasks.toggleComplete(instances[0].id!, to: true);
+      expect(
+        (await instancesOf(id)).map((t) => t.cycleIndex).toSet(),
+        <int>{0},
+      );
+
+      // 完成最后一项：本轮完结 → 生成下一轮（+2 / +3）
+      await store.tasks.toggleComplete(instances[1].id!, to: true);
+      instances = await instancesOf(id);
+      final pendingRounds = instances
+          .where((t) => !t.isCompleted)
+          .map((t) => t.cycleIndex)
+          .toSet();
+      expect(pendingRounds, <int>{1}, reason: '未完成轮次有且只有一轮');
+      expect(
+        instances
+            .where((t) => t.cycleIndex == 1)
+            .map((t) => DateUtil.formatDate(t.remindDate)),
+        containsAll(<String>[
+          DateUtil.formatDate(DateUtil.addDays(today, 2)),
+          DateUtil.formatDate(DateUtil.addDays(today, 3)),
+        ]),
+      );
+    });
+
+    test('本轮整轮逾期 → 生成顺延到新一轮，错过那一轮的实例保留在库中', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(value: 2),
+        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+      );
+      expect((await instancesOf(id)).single.cycleIndex, 0);
+
+      // 推进 6 天：第 0 轮（今天 ~ +1）整轮逾期 → 生成「今天所在轮」（第 3 轮）
+      await store.generator.generateCurrentRounds(
+        today: DateUtil.addDays(today, 6),
+      );
+      final instances = await instancesOf(id);
+      expect(instances.map((t) => t.cycleIndex).toSet(), <int>{0, 3});
+      expect(
+        DateUtil.formatDate(instances.last.remindDate),
+        DateUtil.formatDate(DateUtil.addDays(today, 6)),
+      );
+      // 错过那一轮不删（非破坏性），只是不进待办页
+      expect(instances.first.isCompleted, isFalse);
+      expect(instances.first.cycleIndex, 0);
+    });
+
+    test('旧口径遗留：晚于本轮的未完成实例在生成时清理，已完成实例作为历史保留', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(value: 2),
+        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+      );
+      final itemId = (await instancesOf(id)).single.periodicItemId!;
+      // 模拟旧「30 天窗口」口径留下的未来轮次
+      await insertLegacyInstance(
+        periodicId: id,
+        itemId: itemId,
+        cycleIndex: 1,
+        date: DateUtil.addDays(today, 2),
+        title: '第 1 轮遗留',
+      );
+      await insertLegacyInstance(
+        periodicId: id,
+        itemId: itemId,
+        cycleIndex: 2,
+        date: DateUtil.addDays(today, 4),
+        title: '第 2 轮遗留',
+      );
+      await insertLegacyInstance(
+        periodicId: id,
+        itemId: itemId,
+        cycleIndex: 3,
+        date: DateUtil.addDays(today, 6),
+        title: '已完成遗留',
+        completed: true,
+      );
+      expect(await instancesOf(id), hasLength(4));
+
+      await store.generator.generateCurrentRounds();
+      final rounds = (await instancesOf(id))
+          .map((t) => '${t.cycleIndex}:${t.isCompleted ? 1 : 0}')
+          .toList();
+      expect(
+        rounds,
+        <String>['0:0', '3:1'],
+        reason: '本轮保留；未来未完成轮被清理；未来已完成轮作为历史保留',
+      );
+    });
+
+    test('待办页口径：未来轮次与错过的一轮都不展示，只展示本轮', () async {
+      // A：本轮（今天 / 明天）+ 手工塞入的未来轮次
+      final id = await store.periodics.insert(
+        buildPeriodic(value: 2),
+        items: <PeriodicItem>[
+          buildItem(dayOffset: 0, title: '第 1 天'),
+          buildItem(dayOffset: 1, title: '第 2 天'),
+        ],
+      );
+      final itemId = (await instancesOf(id)).first.periodicItemId!;
+      await insertLegacyInstance(
+        periodicId: id,
+        itemId: itemId,
+        cycleIndex: 1,
+        date: DateUtil.addDays(today, 2),
+        title: '第 1 天',
+      );
+
+      var groups = await store.tasks.queryGrouped();
+      var visible = <String>[
+        for (final g in groups.sections) for (final t in g.items) t.title,
+      ];
+      expect(visible.where((t) => t == '第 1 天').length, 1,
+          reason: '未来轮次不进待办页');
+      expect(visible.where((t) => t == '第 2 天').length, 1);
+
+      // B：起始日 10 天前（本轮 = 今天所在轮），外加一条错过轮的遗留实例
+      final oldId = await store.periodics.insert(
+        buildPeriodic(value: 2, startDate: DateUtil.addDays(today, -10)),
+        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+      );
+      final current = (await instancesOf(oldId)).single;
+      expect(
+        DateUtil.formatDate(current.remindDate),
+        DateUtil.formatDate(today),
+      );
+      await insertLegacyInstance(
+        periodicId: oldId,
+        itemId: current.periodicItemId!,
+        cycleIndex: 0,
+        date: DateUtil.addDays(today, -10),
+      );
+
+      groups = await store.tasks.queryGrouped();
+      visible = <String>[
+        for (final g in groups.sections) for (final t in g.items) t.title,
+      ];
+      expect(visible.where((t) => t == '打卡').length, 1,
+          reason: '错过的那一轮不展示');
+      expect(
+        groups.overdue.where((t) => t.isPeriodic),
+        isEmpty,
+        reason: '逾期遗留轮不进入待办页（常规逾期待办不受影响）',
+      );
     });
   });
 
@@ -244,8 +547,15 @@ void main() {
       });
       await store.generator.generateForPeriodicId(
         id,
-        from: DateTime(2026, 12, 1),
-        to: DateTime(2027, 2, 28),
+        today: DateTime(2026, 12, 1),
+      );
+      await store.generator.generateForPeriodicId(
+        id,
+        today: DateTime(2027, 1, 1),
+      );
+      await store.generator.generateForPeriodicId(
+        id,
+        today: DateTime(2027, 2, 1),
       );
       final instances = await instancesOf(id);
       final byTitle = <String, List<String>>{};
@@ -267,15 +577,18 @@ void main() {
         ),
         items: <PeriodicItem>[buildItem(dayOffset: 0, title: '还款')],
       );
-      await store.generator.generateForPeriodicId(
-        id,
-        from: DateTime(2026, 1, 1),
-        to: DateTime(2026, 5, 1),
-      );
-      // 只看 2026-01 ~ 2026-04 区间（insert 时还会按真实「今天」补生成窗口内实例）
+      // 一轮一期：逐轮推进（1/31 → 2/28 → 3/31 → 4/30），
+      // 每个「今天」都落在目标轮的第 1 天，从而把该轮生成出来。
+      for (final day in <DateTime>[
+        DateTime(2026, 1, 1),
+        DateTime(2026, 2, 28),
+        DateTime(2026, 3, 31),
+        DateTime(2026, 4, 30),
+      ]) {
+        await store.generator.generateForPeriodicId(id, today: day);
+      }
       final dates = (await instancesOf(id))
           .map((t) => DateUtil.formatDate(t.remindDate))
-          .where((d) => d.compareTo('2026-05-01') < 0)
           .toList();
       expect(
         dates,
@@ -461,10 +774,8 @@ void main() {
     });
 
     test('尚无实例时 queryCurrentCycleProgress 返回 null', () async {
-      final id = await store.periodics.insert(
-        buildPeriodic(startDate: DateUtil.addDays(today, 400)),
-        items: <PeriodicItem>[buildItem(dayOffset: 0)],
-      );
+      // 空周期（无周期项）不会生成任何实例
+      final id = await store.periodics.insert(buildPeriodic());
       expect(await store.periodics.queryCurrentCycleProgress(id), isNull);
     });
   });
@@ -530,14 +841,19 @@ void main() {
           buildItem(dayOffset: 1, title: '摘抄'),
         ],
       );
-      final instances = await instancesOf(id);
+      var instances = await instancesOf(id);
       final keep = instances.firstWhere((t) => t.title == '读书');
       await store.tasks.toggleComplete(keep.id!, to: true);
+      // 推进到下一轮：让「读书」同时存在已完成（本轮）与未完成（下一轮）实例
+      await store.generator.generateCurrentRounds(
+        today: DateUtil.addDays(today, 2),
+      );
+      instances = await instancesOf(id);
 
       final itemId = keep.periodicItemId!;
       final preview = await store.items.previewDelete(itemId);
       expect(preview.keptCompleted, 1);
-      expect(preview.removedPending, greaterThan(0));
+      expect(preview.removedPending, 1);
 
       final result = await store.items.deleteById(itemId);
       expect(result.keptCompleted, 1);
@@ -555,22 +871,25 @@ void main() {
 
     test('三级删除之二：deleteFutureInstances 只删未来的未完成实例', () async {
       final id = await store.periodics.insert(
-        buildPeriodic(value: 1),
-        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+        buildPeriodic(value: 3),
+        items: <PeriodicItem>[
+          buildItem(dayOffset: 0, title: '第 1 天'),
+          buildItem(dayOffset: 1, title: '第 2 天'),
+          buildItem(dayOffset: 2, title: '第 3 天'),
+        ],
       );
       final instances = await instancesOf(id);
-      expect(instances.length, greaterThan(3));
+      expect(instances.length, 3, reason: '一轮一期：本轮三条');
       // 把明天那条标记完成，它不应被「删未来实例」清掉
       await store.tasks.toggleComplete(instances[1].id!, to: true);
 
-      final itemId = instances[0].periodicItemId!;
       final removed = await store.items.deleteFutureInstances(
-        itemId,
-        fromDate: DateUtil.addDays(today, 1),
+        instances[2].periodicItemId!,
+        fromDate: DateUtil.addDays(today, 2),
       );
+      expect(removed, 1);
       final after = await instancesOf(id);
-      expect(removed, instances.length - 2); // 今天 + 已完成的明天 保留
-      expect(after.length, 2);
+      expect(after.length, 2, reason: '今天 1 条 + 已完成的明天 1 条');
       expect(after.any((t) => t.id == instances[1].id && t.isCompleted), isTrue);
     });
 
@@ -653,56 +972,74 @@ void main() {
     test('删除单条周期实例后重新生成，实例数量不变、原 id 不回来', () async {
       final id = await store.periodics.insert(
         buildPeriodic(value: 2),
-        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+        items: <PeriodicItem>[
+          buildItem(dayOffset: 0, title: '打卡'),
+          buildItem(dayOffset: 1, title: '复盘'),
+        ],
       );
       final instances = await instancesOf(id);
+      expect(instances.length, 2, reason: '一轮一期：本轮两条共用 cycleIndex');
       final target = instances[1];
       await store.tasks.deleteById(target.id!);
 
-      await store.generator.generateForWindow();
-      await store.generator.generateForWindow();
+      await store.generator.generateCurrentRounds();
+      await store.generator.generateCurrentRounds();
 
       final after = await instancesOf(id);
       expect(after.length, instances.length - 1);
       expect(after.any((t) => t.id == target.id), isFalse);
-      expect(after.any((t) => t.cycleIndex == target.cycleIndex), isFalse);
+      expect(
+        after.any((t) =>
+            t.cycleIndex == target.cycleIndex &&
+            t.periodicItemId == target.periodicItemId),
+        isFalse,
+        reason: '被删的 (周期项, 轮次) 不复活',
+      );
     });
 
     test('撤销删除后墓碑清除：按原 id 回来且不会被重复生成', () async {
       final id = await store.periodics.insert(
         buildPeriodic(value: 2),
-        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+        items: <PeriodicItem>[
+          buildItem(dayOffset: 0, title: '打卡'),
+          buildItem(dayOffset: 1, title: '复盘'),
+        ],
       );
       final instances = await instancesOf(id);
       final target = instances[1];
       final snapshot = (await store.tasks.deleteById(target.id!))!;
       await store.tasks.restore(snapshot);
 
-      expect((await store.tasks.findById(target.id!))!.title, '打卡');
-      await store.generator.generateForWindow();
+      expect((await store.tasks.findById(target.id!))!.title, '复盘');
+      await store.generator.generateCurrentRounds();
       final after = await instancesOf(id);
       expect(after.length, instances.length);
-      expect(after.where((t) => t.cycleIndex == target.cycleIndex).length, 1);
+      expect(after.where((t) => t.cycleIndex == target.cycleIndex).length, 2);
     });
 
     test('删除未来实例后不会被生成回来，已完成实例保留', () async {
       final id = await store.periodics.insert(
-        buildPeriodic(value: 1),
-        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+        buildPeriodic(value: 3),
+        items: <PeriodicItem>[
+          buildItem(dayOffset: 0, title: '第 1 天'),
+          buildItem(dayOffset: 1, title: '第 2 天'),
+          buildItem(dayOffset: 2, title: '第 3 天'),
+        ],
       );
       final instances = await instancesOf(id);
+      expect(instances.length, 3, reason: '一轮一期：本轮三条');
       await store.tasks.toggleComplete(instances[1].id!, to: true);
-      final itemId = instances[0].periodicItemId!;
 
       final removed = await store.items.deleteFutureInstances(
-        itemId,
-        fromDate: DateUtil.addDays(today, 1),
+        instances[2].periodicItemId!,
+        fromDate: DateUtil.addDays(today, 2),
       );
-      expect(removed, instances.length - 2);
+      expect(removed, 1);
 
-      await store.generator.generateForWindow();
+      await store.generator.generateCurrentRounds();
       final after = await instancesOf(id);
-      expect(after.length, 2, reason: '今天 1 条 + 已完成的明天 1 条');
+      expect(after.length, 2,
+          reason: '今天 1 条 + 已完成的明天 1 条；+2 那条被删且不复活');
       expect(after.any((t) => t.id == instances[1].id && t.isCompleted), isTrue);
     });
   });

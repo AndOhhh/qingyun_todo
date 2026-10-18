@@ -1,9 +1,11 @@
 import 'package:sqflite/sqflite.dart';
 
+import 'package:qingyun_todo/models/periodic.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/models/todo_groups.dart';
 import 'package:qingyun_todo/repositories/cycle_counter.dart';
 import 'package:qingyun_todo/repositories/periodic_completion.dart';
+import 'package:qingyun_todo/repositories/periodic_round_policy.dart';
 import 'package:qingyun_todo/repositories/periodic_skips.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
 import 'package:qingyun_todo/utils/db_helper.dart';
@@ -244,7 +246,24 @@ class TaskRepository {
   }
 
   /// 分组结果：逾期 / 今天 / 明天 / 后续 / 已完成（Q10）
-  Future<TodoGroups> queryGrouped() async => TodoGroups.from(await queryAll());
+  ///
+  /// **一轮一期（N13）**：周期实例只展示「本轮」，其余轮次的未完成实例不进入
+  /// 待办页（规则与生成引擎共用 [PeriodicRoundPolicy]）。
+  Future<TodoGroups> queryGrouped() async =>
+      TodoGroups.from(await _visibleOnTodoPage(await queryAll()));
+
+  /// 待办页可见性过滤；库里没有周期实例时零额外查询
+  Future<List<Todo>> _visibleOnTodoPage(List<Todo> all) async {
+    if (!all.any((task) => task.periodicId != null)) return all;
+    final db = await _db;
+    final rows = await db.query('periodic_configs');
+    final periodics = rows.map(Periodic.fromMap).toList(growable: false);
+    return PeriodicRoundPolicy.visibleOnTodoPage(
+      tasks: all,
+      periodics: periodics,
+      today: DateUtil.today(),
+    );
+  }
 
   /// 日程页：指定日期的全部待办（docs/02 §8.2）
   Future<List<Todo>> queryByDate(DateTime date) async {

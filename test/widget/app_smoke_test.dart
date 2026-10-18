@@ -198,14 +198,18 @@ void main() {
 
     await pumpApp(tester);
 
-    // 每天一轮 → 今天 / 明天 / 后续 都会各生成一条同名实例
+    // 一轮一期（N13）：启动只为「本轮」生成实例，不再铺未来轮次
     expect(find.text('喝水 2000ml'), findsWidgets);
     expect(find.text('周期·每天喝水'), findsWidgets);
     expect(find.text('今天 · 1'), findsOneWidget);
-    expect(find.text('明天 · 1'), findsOneWidget);
+    expect(find.text('明天 · 1'), findsNothing);
     final all = await store.tasks.queryAll();
-    expect(all, isNotEmpty);
+    expect(all, hasLength(1));
     expect(all.every((t) => t.isPeriodic), isTrue);
+    expect(
+      DateUtil.formatDate(all.single.remindDate),
+      DateUtil.formatDate(DateUtil.today()),
+    );
   });
 
   testWidgets('新增待办闭环：+ → 表单 → 保存 → 落库并出现在列表（FR-02）', (tester) async {
