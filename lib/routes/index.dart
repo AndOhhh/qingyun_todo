@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:qingyun_todo/services/notification_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:qingyun_todo/constants/routes.dart';
 import 'package:qingyun_todo/pages/main/index.dart';
+import 'package:qingyun_todo/pages/notification_guide/index.dart';
 import 'package:qingyun_todo/pages/period/detail/index.dart';
 import 'package:qingyun_todo/pages/period/edit/index.dart';
 import 'package:qingyun_todo/pages/period/item_edit/index.dart';
@@ -21,6 +23,16 @@ Widget getRootWidget() {
     navigatorKey: rootNavigatorKey,
     initialRoute: RouteConstants.mainPath,
     onGenerateRoute: onGenerateRoute,
+    // 中文日期选择器：CupertinoDatePicker 的月份（10月）/ 星期文案取自
+    // CupertinoLocalizations，不注册代理时会落到框架内置的默认英文（Oct / Sun…）。
+    // 应用文案本身全为中文，这里直接固定 zh，不跟随系统语言。
+    locale: const Locale('zh'),
+    supportedLocales: const <Locale>[Locale('zh'), Locale('en')],
+    localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
   );
 }
 
@@ -62,6 +74,8 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
         periodicId: idOf('periodicId'),
         initialDayOffset: idOf('dayOffset') ?? 0,
       );
+    case RouteConstants.notificationGuide:
+      page = const NotificationGuidePage();
     default:
       page = null;
   }

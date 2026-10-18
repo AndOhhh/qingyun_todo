@@ -6,6 +6,7 @@ import 'package:qingyun_todo/components/empty_state.dart';
 import 'package:qingyun_todo/components/error_state.dart';
 import 'package:qingyun_todo/components/notification_banner.dart';
 import 'package:qingyun_todo/components/floating_add_button.dart';
+import 'package:qingyun_todo/constants/routes.dart';
 import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/models/todo_groups.dart';
@@ -51,15 +52,10 @@ class _TodoViewState extends ConsumerState<TodoView> {
     setState(() => _health = health);
   }
 
-  Future<void> _fixNotification() async {
-    final service = ref.read(notificationServiceProvider);
-    final blocker = _health?.blocker;
-    if (blocker == NotificationBlocker.permissionDenied) {
-      await service.openNotificationSettings();
-    } else if (blocker == NotificationBlocker.exactAlarmDenied) {
-      await service.requestExactAlarms();
-    }
-    await service.reconcile();
+  /// 打开「通知收不到？」引导页：横幅与导航栏铃铛共用入口。
+  /// 返回后重新自检，让横幅立即反映用户刚改过的系统设置。
+  Future<void> _openNotificationGuide() async {
+    await Navigator.of(context).pushNamed(RouteConstants.notificationGuide);
     if (!mounted) return;
     await _refreshHealth();
   }
@@ -89,6 +85,20 @@ class _TodoViewState extends ConsumerState<TodoView> {
                 // 去掉大标题导航栏底部的发丝分割线（视觉更干净）
                 border: null,
             largeTitle: const Text('待办', style: TextStyle(color: Colors.black)),
+            // 通知诊断入口：系统权限正常却收不到提醒时（国产 ROM 限制）的自救通道
+            trailing: Semantics(
+              button: true,
+              label: '通知收不到？查看诊断与厂商设置引导',
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _openNotificationGuide,
+                child: const Icon(
+                  CupertinoIcons.bell,
+                  size: 22,
+                  color: Color(0xFF007AFF),
+                ),
+              ),
+            ),
           ),
           // 通知自检横幅：权限/精确闹钟被拒时给出原因与一键修复
           if (_health != null &&
@@ -99,7 +109,7 @@ class _TodoViewState extends ConsumerState<TodoView> {
               child: NotificationBanner(
                 health: _health!,
                 onDismiss: () => setState(() => _healthDismissed = true),
-                onFix: _fixNotification,
+                onFix: _openNotificationGuide,
                 onFixed: _refreshHealth,
               ),
             ),

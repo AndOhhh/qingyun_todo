@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:qingyun_todo/components/empty_state.dart';
 import 'package:qingyun_todo/components/error_state.dart';
+import 'package:qingyun_todo/components/width_guard.dart';
 import 'package:qingyun_todo/models/statistics_models.dart';
 import 'package:qingyun_todo/pages/statistics/widgets/heatmap_month.dart';
 import 'package:qingyun_todo/pages/statistics/widgets/priority_donut.dart';
@@ -72,34 +73,39 @@ class _StatisticsViewState extends ConsumerState<StatisticsView> {
                   // S2：范围只作用于趋势 / 分布类图表（D2）。
                   // 选中态用主色浅调胶囊（与底部 Tab 胶囊同一设计语言），
                   // 替代默认灰底白块的高对比组合。
-                  CupertinoSlidingSegmentedControl<StatsRange>(
-                    groupValue: _range,
-                    backgroundColor: Colors.white,
-                    thumbColor: StatisticsView.kRangeThumbColor,
-                    onValueChanged: (value) {
-                      if (value != null) setState(() => _range = value);
-                    },
-                    children: <StatsRange, Widget>{
-                      for (final range in StatsRange.values)
-                        range: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            range.label,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: _range == range
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: _range == range
-                                  ? const Color(0xFF007AFF)
-                                  : const Color(0xFF636366),
+                  //
+                  // WidthGuard：预热帧视图宽度为 0 时分段控件会算出负段宽并断言
+                  // （BoxConstraints has a negative minimum width），此处先跳过构建。
+                  WidthGuard(
+                    child: CupertinoSlidingSegmentedControl<StatsRange>(
+                      groupValue: _range,
+                      backgroundColor: Colors.white,
+                      thumbColor: StatisticsView.kRangeThumbColor,
+                      onValueChanged: (value) {
+                        if (value != null) setState(() => _range = value);
+                      },
+                      children: <StatsRange, Widget>{
+                        for (final range in StatsRange.values)
+                          range: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              range.label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: _range == range
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                                color: _range == range
+                                    ? const Color(0xFF007AFF)
+                                    : const Color(0xFF636366),
+                              ),
                             ),
                           ),
-                        ),
-                    },
+                      },
+                    ),
                   ),
                   const SizedBox(height: 16),
                   summaryAsync.when(

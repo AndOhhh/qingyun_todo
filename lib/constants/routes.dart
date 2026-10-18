@@ -21,6 +21,9 @@ class RouteConstants {
   /// 周期项新增 / 编辑：`?id=` 编辑，`?periodicId=&dayOffset=` 新增
   static const String periodicItemEdit = '/periodic/item/edit';
 
+  /// 通知诊断与厂商权限引导（「通知收不到？」）
+  static const String notificationGuide = '/notification/guide';
+
   static String _withId(String path, int? id) =>
       id == null ? path : '$path?id=$id';
 

@@ -21,4 +21,27 @@ class SystemSettings {
       debugPrint('[system] 打开通知设置失败：$error');
     }
   }
+
+  /// 打开本应用的系统设置详情页（Android = 应用信息；iOS = 本应用设置页）。
+  ///
+  /// 国产 ROM 的「自启动 / 耗电管理」入口都挂在应用信息页下，引导时直接送用户过去，
+  /// 比让其在设置树里翻找更可靠。
+  static Future<void> openAppSettings() async {
+    try {
+      await _channel.invokeMethod<void>('openAppSettings');
+    } catch (error) {
+      debugPrint('[system] 打开应用设置失败：$error');
+    }
+  }
+
+  /// 设备厂商标识（Android `Build.MANUFACTURER`，如 `OnePlus` / `Xiaomi`）；
+  /// 非 Android 平台或读取失败返回 null。
+  static Future<String?> getBrand() async {
+    try {
+      return await _channel.invokeMethod<String>('getBrand');
+    } catch (error) {
+      debugPrint('[system] 读取设备厂商失败：$error');
+      return null;
+    }
+  }
 }

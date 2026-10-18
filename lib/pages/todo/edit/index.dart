@@ -369,13 +369,29 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
   }
 
   Future<void> _pickTime() async {
-    final result = await pickTime(context, initial: _remindTime);
+    final result = await pickTime(
+      context,
+      initial: _remindTime ?? _pickerSeedTime,
+    );
     if (result == null || !mounted) return;
     setState(() {
       _remindTime = result.cleared ? null : result.time;
       _dirty = true;
     });
   }
+
+  /// 新增态尚未设置提醒时间时，时间选择器的起始值（`HH:mm`）：
+  /// - **待办页新增**（未带 `initialDate`）→ 当前时刻：当日事务通常就选「现在附近」，
+  ///   从 09:00 起步要滚很多格；
+  /// - **日程页新增**（带了选中日期）→ null：沿用控件默认 09:00，
+  ///   按天规划的场景固定上午 9 点更符合语义；
+  /// - 编辑已有待办时 [_remindTime] 有值，不会走到这里。
+  ///
+  /// 用 `initialDate` 区分入口是既有约定：目前只有日程页「+」会传它。
+  String? get _pickerSeedTime =>
+      _isNew && widget.initialDate == null
+          ? DateUtil.formatTime(DateTime.now())
+          : null;
 
   Future<void> _save(Todo? existing) async {
     final title = _titleController.text.trim();
