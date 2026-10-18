@@ -116,8 +116,42 @@ void main() {
     // M4 = 1 逾期，M5 = 2 待处理
     expect(find.text('1'), findsWidgets);
     expect(find.text('2'), findsWidgets);
-    // M3 连续打卡 = 2（昨天 + 今天）
-    expect(find.textContaining('保持住'), findsOneWidget);
+    // M3 连续打卡 = 2（昨天 + 今天）→ 显示下一档里程碑进度
+    expect(find.textContaining('天连击'), findsOneWidget);
+    expect(find.text('目标 3 天'), findsOneWidget);
+    // M4 > 0 → 警示态文案
+    expect(find.text('未完成且已过期，尽快处理'), findsOneWidget);
+  });
+
+  testWidgets('逾期为 0 时给正向反馈（而不是红色 0）', (tester) async {
+    await store.tasks.insert(Todo(title: '今天的事', remindDate: today));
+    useTallScreen(tester);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[dbHelperProvider.overrideWithValue(store.db)],
+        child: getRootWidget(),
+      ),
+    );
+    await settle(tester);
+    await gotoStatistics(tester);
+
+    expect(find.text('逾期任务'), findsOneWidget);
+    expect(find.text('没有逾期任务，继续保持'), findsOneWidget);
+    expect(find.text('未完成且已过期，尽快处理'), findsNothing);
+  });
+
+  test('连续打卡里程碑：下一档 + 当前档位下界', () {
+    expect(nextStreakMilestone(0), 3);
+    expect(nextStreakMilestone(2), 3);
+    expect(nextStreakMilestone(3), 7);
+    expect(nextStreakMilestone(29), 30);
+    expect(nextStreakMilestone(365), isNull, reason: '已达最高档');
+
+    expect(previousStreakMilestone(0), 0);
+    expect(previousStreakMilestone(2), 0);
+    expect(previousStreakMilestone(3), 3);
+    expect(previousStreakMilestone(6), 3);
+    expect(previousStreakMilestone(400), 365);
   });
 
   testWidgets('范围切换只影响趋势/分布卡片文案与数据', (tester) async {

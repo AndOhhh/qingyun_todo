@@ -14,6 +14,27 @@ import 'package:qingyun_todo/pages/statistics/widgets/weekday_bars.dart';
 import 'package:qingyun_todo/stores/statistics_store.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
 
+/// 连续打卡的里程碑档位（天）：用于「下一档」进度提示
+const List<int> kStreakMilestones = <int>[3, 7, 14, 30, 60, 100, 180, 365];
+
+/// 连续打卡的下一档里程碑；已达最高档返回 null（纯函数，单测覆盖）
+int? nextStreakMilestone(int days) {
+  for (final milestone in kStreakMilestones) {
+    if (milestone > days) return milestone;
+  }
+  return null;
+}
+
+/// 当前档位下界（进度条起点）：已达成的最小档位；未达首档为 0（纯函数）
+int previousStreakMilestone(int days) {
+  var previous = 0;
+  for (final milestone in kStreakMilestones) {
+    if (milestone > days) break;
+    previous = milestone;
+  }
+  return previous;
+}
+
 /// 统计页（FR-18）：首屏核心指标 M1~M6（固定口径）+ 趋势/分布图表 A1~A3
 /// （受时间范围影响，D2）+ 月历热力 A7（自带月份维度）。
 ///
@@ -236,15 +257,7 @@ class _StatisticsViewState extends ConsumerState<StatisticsView> {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: StatCard(
-                  title: '逾期任务',
-                  value: '${s.overdue}',
-                  color: const Color(0xFFFF3B30),
-                  icon: CupertinoIcons.exclamationmark_triangle,
-                  subtitle: '未完成且已过期',
-                ),
-              ),
+              Expanded(child: _OverdueCard(count: s.overdue)),
             ],
           ),
         ),
@@ -344,8 +357,15 @@ class _RingCard extends StatelessWidget {
   }
 }
 
-/// M3 连续打卡卡
+/// M3 连续打卡卡：暖色高亮 + 「下一档里程碑」进度；断链（0 天）回落中性灰。
+///
+/// 视觉动机：连击是**状态型**指标而非数值型 —— 有连击时用暖色渐变与火焰强调
+/// 「在连击中」，断了则保持安静的灰色，避免用红色制造挫败感。
 class _StreakCard extends StatelessWidget {
+  static const Color _flame = Color(0xFFFF9500);
+  static const Color _flameDeep = Color(0xFFFF7A00);
+  static const Color _idle = Color(0xFF8E8E93);
+
   final int days;
 
   const _StreakCard({required this.days});
@@ -353,61 +373,226 @@ class _StreakCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = days > 0;
+    final next = nextStreakMilestone(days);
+    final color = active ? _flame : _idle;
+    final previous = previousStreakMilestone(days);
+    final progress = next == null
+        ? 1.0
+        : ((days - previous) / (next - previous)).clamp(0.0, 1.0);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: active ? const Color(0xFFFFF7EC) : const Color(0xFFF7F7FA),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: active ? const Color(0xFFFFE2BC) : const Color(0xFFE5E5EA),
+          width: 0.8,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Text(
-            '连续打卡',
-            style: TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
-          ),
-          const SizedBox(height: 10),
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(
-                  CupertinoIcons.flame,
-                  size: 30,
-                  color: active ? const Color(0xFFFF9500) : const Color(0xFFC7C7CC),
-                ),
-                const SizedBox(width: 8),
+          Row(
+            children: <Widget>[
+              const Text(
+                '连续打卡',
+                style: TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
+              ),
+              const Spacer(),
+              if (next != null)
                 Text(
-                  '$days',
+                  '目标 $next 天',
                   style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    height: 1,
-                    letterSpacing: -1,
-                    color: active
-                        ? const Color(0xFFFF9500)
-                        : const Color(0xFFC7C7CC),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: color.withValues(alpha: 0.8),
                   ),
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  '天',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: active
-                        ? const Color(0xFFFF9500)
-                        : const Color(0xFFC7C7CC),
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
           const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Icon(
+                active ? CupertinoIcons.flame_fill : CupertinoIcons.flame,
+                size: 26,
+                color: color,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$days',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                  letterSpacing: -1,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(
+                  '天',
+                  style: TextStyle(fontSize: 13, color: color),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _MilestoneBar(
+            progress: progress,
+            color: color,
+            track: active ? const Color(0xFFFFE2BC) : const Color(0xFFE5E5EA),
+            gradientEnd: _flameDeep,
+          ),
+          const SizedBox(height: 6),
           Text(
-            active ? '保持住，别断链' : '完成一个待办开始打卡',
+            _caption(days, next),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 11, color: Color(0xFFAEAEB2)),
           ),
         ],
+      ),
+    );
+  }
+
+  static String _caption(int days, int? next) {
+    if (days <= 0) return '完成一个待办开始打卡';
+    if (next == null) return '已达成全部里程碑，太强了';
+    return '还差 ${next - days} 天达成 $next 天连击';
+  }
+}
+
+/// M4 逾期任务卡：**状态化**配色 —— 0 条给正向反馈（绿），有逾期才警示（红），
+/// 避免「一切正常时也挂一个红色 0」造成的无谓压力。
+class _OverdueCard extends StatelessWidget {
+  static const Color _alert = Color(0xFFFF3B30);
+  static const Color _calm = Color(0xFF34C759);
+
+  final int count;
+
+  const _OverdueCard({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final clean = count == 0;
+    final color = clean ? _calm : _alert;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: clean ? const Color(0xFFF1FAF3) : const Color(0xFFFFF4F3),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: clean ? const Color(0xFFCBEFD5) : const Color(0xFFFFD9D6),
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 20,
+                height: 20,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  clean
+                      ? CupertinoIcons.checkmark_circle_fill
+                      : CupertinoIcons.exclamationmark_circle_fill,
+                  size: 14,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  '逾期任务',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                  letterSpacing: -1,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text('项', style: TextStyle(fontSize: 13, color: color)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            clean ? '没有逾期任务，继续保持' : '未完成且已过期，尽快处理',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: Color(0xFFAEAEB2)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 里程碑细进度条（连续打卡用）：轨道 + 渐变填充
+class _MilestoneBar extends StatelessWidget {
+  final double progress;
+  final Color color;
+  final Color track;
+  final Color gradientEnd;
+
+  const _MilestoneBar({
+    required this.progress,
+    required this.color,
+    required this.track,
+    required this.gradientEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 5,
+      decoration: BoxDecoration(
+        color: track,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: progress <= 0 ? 0 : progress,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: <Color>[color, gradientEnd],
+            ),
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
       ),
     );
   }
