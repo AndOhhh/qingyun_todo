@@ -84,20 +84,30 @@ class _TodoViewState extends ConsumerState<TodoView> {
             heroTag: 'todo-large-title',
                 // 去掉大标题导航栏底部的发丝分割线（视觉更干净）
                 border: null,
-            largeTitle: const Text('待办', style: TextStyle(color: Colors.black)),
-            // 通知诊断入口：系统权限正常却收不到提醒时（国产 ROM 限制）的自救通道
-            trailing: Semantics(
-              button: true,
-              label: '通知收不到？查看诊断与厂商设置引导',
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: _openNotificationGuide,
-                child: const Icon(
-                  CupertinoIcons.bell,
-                  size: 22,
-                  color: Color(0xFF007AFF),
+            largeTitle: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                const Text('待办', style: TextStyle(color: Colors.black)),
+                // 通知诊断入口紧贴大标题之后（而非贴最右）
+                // translate：中文大标题字形在 34pt 行框里偏下，图标需下沉做光学对齐
+                Transform.translate(
+                  offset: const Offset(0, 7),
+                  child: Semantics(
+                    button: true,
+                    label: '通知收不到？查看诊断与厂商设置引导',
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: _openNotificationGuide,
+                      child: const Icon(
+                        CupertinoIcons.bell,
+                        size: 22,
+                        color: Color(0xFF007AFF),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
           // 通知自检横幅：权限/精确闹钟被拒时给出原因与一键修复
