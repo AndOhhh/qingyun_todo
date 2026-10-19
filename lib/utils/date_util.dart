@@ -142,7 +142,7 @@ class DateUtil {
   }
 
   /// 月历网格（**周日开头**，与参考图一致）：
-  /// 返回若干完整周，月首/月末之外的位置为 null。
+  /// 返回若干完整周，月首/月末之外的位置为 null（热力图等只需当月格子）。
   static List<DateTime?> monthGrid(DateTime month) {
     final first = firstDayOfMonth(month);
     final last = lastDayOfMonth(month);
@@ -153,6 +153,26 @@ class DateUtil {
     ];
     while (cells.length % 7 != 0) {
       cells.add(null);
+    }
+    return cells;
+  }
+
+  /// 月历网格（**含相邻月日期**，周日开头）：首尾用上/下月的真实日期补齐。
+  ///
+  /// 与 [monthGrid] 的差别：不返回 null，而是给出真实的相邻月日期，
+  /// 供日程页把「本月 1 号之前 / 月末之后」的格子灰色展示，并支持点击跳月。
+  static List<DateTime> monthGridWithAdjacent(DateTime month) {
+    final first = firstDayOfMonth(month);
+    final last = lastDayOfMonth(month);
+    final leading = first.weekday % 7; // 周日=0 … 周六=6
+    final cells = <DateTime>[
+      for (var i = leading; i > 0; i--) addDays(first, -i),
+      for (var d = first; !d.isAfter(last); d = addDays(d, 1)) d,
+    ];
+    var next = addDays(last, 1);
+    while (cells.length % 7 != 0) {
+      cells.add(next);
+      next = addDays(next, 1);
     }
     return cells;
   }

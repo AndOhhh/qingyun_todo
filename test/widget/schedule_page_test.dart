@@ -78,9 +78,9 @@ void main() {
     // 周日开头的星期行
     expect(find.text('日'), findsOneWidget);
     expect(find.text('六'), findsOneWidget);
-    // 当月 1 号与最后一天都在网格里
-    expect(find.text('1'), findsOneWidget);
-    expect(find.text('${DateUtil.lastDayOfMonth(today).day}'), findsOneWidget);
+    // 当月 1 号与最后一天都在网格里（首尾可能同时出现相邻月的同日号，故用 findsWidgets）
+    expect(find.text('1'), findsWidgets);
+    expect(find.text('${DateUtil.lastDayOfMonth(today).day}'), findsWidgets);
     // 当日安排列出今天的任务
     expect(find.text('今天的事'), findsOneWidget);
     expect(find.text('当日安排'), findsOneWidget);
@@ -422,6 +422,43 @@ void main() {
 
     expect(
       find.textContaining('${today.year}年${today.month}月'),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('点击灰色相邻月日期 → 跳转到该月并选中该日（N17）', (tester) async {
+    useTallScreen(tester);
+    await pumpApp(tester);
+    await gotoSchedule(tester);
+
+    // 取当前展示月份的前导相邻月日期；若当月 1 号恰为周日则向后翻月（最多 3 次必命中）
+    var month = DateTime(today.year, today.month);
+    var leading = DateUtil.monthGridWithAdjacent(month).first;
+    for (var i = 0; i < 3 && leading.month == month.month; i++) {
+      await tester.fling(
+        find.byType(ScheduleCalendar),
+        const Offset(-300, 0),
+        1200,
+      );
+      await settle(tester);
+      month = DateUtil.addMonthsCalendar(month, 1);
+      leading = DateUtil.monthGridWithAdjacent(month).first;
+    }
+    expect(leading.month, isNot(month.month), reason: '应存在前导相邻月日期');
+
+    // 灰色格子排在网格最前，故取第一个同日号文本
+    await tester.tap(find.text('${leading.day}').first);
+    await settle(tester);
+
+    final prevMonth = DateUtil.addMonthsCalendar(month, -1);
+    // 标题切到相邻月
+    expect(
+      find.textContaining('${prevMonth.year}年${prevMonth.month}月'),
+      findsWidgets,
+    );
+    // 当日安排标题已选中该日
+    expect(
+      find.textContaining('${leading.month}月${leading.day}日'),
       findsWidgets,
     );
   });

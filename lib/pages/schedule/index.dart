@@ -79,6 +79,23 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
     final monthKey = DateUtil.monthKey(_month);
     final dateKey = DateUtil.formatDate(_selected);
     final markersAsync = ref.watch(monthMarkersProvider(monthKey));
+    // 首尾相邻月的标记也取一份：月历里灰色补位日期同样显示任务圆点；
+    // 「本月概览」仍只用本月标记，避免把相邻月数据算进来
+    final prevMarkers = ref
+        .watch(monthMarkersProvider(
+          DateUtil.monthKey(DateUtil.addMonthsCalendar(_month, -1)),
+        ))
+        .valueOrNull;
+    final nextMarkers = ref
+        .watch(monthMarkersProvider(
+          DateUtil.monthKey(DateUtil.addMonthsCalendar(_month, 1)),
+        ))
+        .valueOrNull;
+    final calendarMarkers = <String, DayMarkers>{
+      ...?prevMarkers,
+      ...?markersAsync.valueOrNull,
+      ...?nextMarkers,
+    };
     final tasksAsync = ref.watch(dayTasksProvider(dateKey));
 
     return CupertinoTheme(
@@ -135,7 +152,7 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
                   month: _month,
                   selected: _selected,
                   today: today,
-                  markers: markersAsync.valueOrNull ?? const <String, DayMarkers>{},
+                  markers: calendarMarkers,
                   weekOnly: _weekOnly,
                   onDaySelected: _selectDay,
                   onPrevMonth: () => _shiftMonth(-1),

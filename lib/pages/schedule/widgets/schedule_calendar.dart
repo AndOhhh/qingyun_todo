@@ -8,6 +8,8 @@ import 'package:qingyun_todo/utils/lunar_util.dart';
 /// 日程页月历：月份头（含周序号与翻页）+ 星期行 + 日期网格（FR-16）。
 ///
 /// - 支持**月 ↔ 单周折叠**（3）：折叠后只渲染选中日所在周，跨月日期补全并置灰；
+/// - **首尾补齐相邻月日期**：本月 1 号不是周日 / 月末不是周六时，首尾格子用上
+///   下月的真实日期**灰色**展示，点击即跳转到对应月份并选中该日（N17）；
 /// - 标记（4）：当天 1 条 → 圆点；>1 条 → 数字角标；颜色语义同下；
 /// - 颜色语义（逾期不入库，按「日期 < 今天」实时派生）：
 ///   红 = 有逾期未完成，蓝 = 有未完成，绿 = 全部完成。
@@ -57,8 +59,8 @@ class ScheduleCalendar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cells = weekOnly
-        ? DateUtil.weekOf(selected).map<DateTime?>((d) => d).toList()
-        : DateUtil.monthGrid(month);
+        ? DateUtil.weekOf(selected)
+        : DateUtil.monthGridWithAdjacent(month);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
       child: Column(
@@ -135,14 +137,14 @@ class ScheduleCalendar extends StatelessWidget {
     );
   }
 
-  Widget _buildCell(DateTime? day) {
-    if (day == null) return const SizedBox(height: 52);
+  Widget _buildCell(DateTime day) {
     final key = DateUtil.formatDate(day);
     final marker = markers[key];
     final isSelected = DateUtil.dateOnly(day) == DateUtil.dateOnly(selected);
     final isToday = DateUtil.dateOnly(day) == DateUtil.dateOnly(today);
-    // 单周视图下跨月日期置灰（参考图折叠态的 30 / 31）
-    final isOutsideMonth = weekOnly && day.month != month.month;
+    // 跨月日期置灰：月视图首尾补齐的相邻月日期（可点按跳月）、单周视图跨月日期
+    final isOutsideMonth =
+        day.year != month.year || day.month != month.month;
 
     final lunar = LunarUtil.info(day);
 
