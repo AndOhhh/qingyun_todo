@@ -2,7 +2,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import 'package:qingyun_todo/models/statistics_models.dart';
-import 'package:qingyun_todo/models/todo_priority.dart';
 import 'package:qingyun_todo/pages/statistics/widgets/stat_card.dart';
 
 /// A2 优先级分布环形图（用各级规范色）+ 图例
@@ -30,7 +29,7 @@ class PriorityDonut extends StatelessWidget {
                 for (final s in visible)
                   PieChartSectionData(
                     value: s.total.toDouble(),
-                    color: s.priority.donutColor,
+                    color: s.priority.color,
                     radius: 26,
                     showTitle: false,
                   ),
@@ -61,7 +60,7 @@ class PriorityDonut extends StatelessWidget {
                         width: 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: s.priority.donutColor,
+                          color: s.priority.color,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -90,11 +89,4 @@ class PriorityDonut extends StatelessWidget {
       ],
     );
   }
-}
-
-/// 无优先级时的兜底色（`TodoPriority.none.color` 为主色蓝，环形图里改用灰，
-/// 避免与图表主色混淆）
-extension PriorityDonutColor on TodoPriority {
-  Color get donutColor =>
-      this == TodoPriority.none ? const Color(0xFFC7C7CC) : color;
 }
