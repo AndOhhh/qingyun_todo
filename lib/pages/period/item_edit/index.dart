@@ -333,7 +333,7 @@ class _PeriodicItemEditPageState extends ConsumerState<PeriodicItemEditPage> {
               children: <Widget>[
                 FormBlock(
                   label: '色带颜色',
-                  hint: '生成的待办会沿用这个色带；选「跟随」时按优先级取色。',
+                  hint: '生成的待办会沿用这个色带；默认按优先级取色。',
                   child: AccentColorPicker(
                     value: _accentColorHex,
                     priority: _priority,

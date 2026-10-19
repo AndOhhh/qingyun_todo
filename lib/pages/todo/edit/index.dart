@@ -302,7 +302,7 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
               children: <Widget>[
                 FormBlock(
                   label: '色带颜色',
-                  hint: '选「跟随」时按优先级自动取色，落库为空值。',
+                  hint: '默认按优先级取色（改优先级会跟着变）；点选色块可单独指定。',
                   child: AccentColorPicker(
                     value: _accentColorHex,
                     priority: _priority,
