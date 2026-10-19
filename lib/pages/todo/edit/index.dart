@@ -9,7 +9,6 @@ import 'package:qingyun_todo/components/empty_state.dart';
 import 'package:qingyun_todo/components/error_state.dart';
 import 'package:qingyun_todo/components/form_card.dart';
 import 'package:qingyun_todo/components/priority_picker.dart';
-import 'package:qingyun_todo/components/wide_button.dart';
 import 'package:qingyun_todo/logic/app_actions.dart';
 import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
@@ -315,43 +314,45 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
               ],
             ),
             if (task != null) ...<Widget>[
-              const SizedBox(height: 28),
-              WideButton(
-                label: task.isCompleted ? '取消完成' : '标记完成',
-                icon: task.isCompleted
-                    ? CupertinoIcons.arrow_counterclockwise
-                    : CupertinoIcons.checkmark_circle,
-                // 绿色 = 完成；红色 = 删除，两者严格区分（Q5）
-                color: task.isCompleted
-                    ? const Color(0xFF8E8E93)
-                    : const Color(0xFF34C759),
-                onTap: _saving
-                    ? null
-                    : () => toggleTodoComplete(context, ref, task),
-              ),
-              const SizedBox(height: 10),
-              // 删除与「标记完成」在颜色、位置、确认强度上完全分离（Q5）
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: _saving ? null : () => _delete(task),
-                child: const Text(
-                  '删除待办',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFFF3B30),
+              const SizedBox(height: 18),
+              // 完成与删除收进同一张动作卡（与页面其它 FormCard 同构）：
+              // 完成 = 绿色即时动作；删除 = 红色危险动作（二次确认 / 周期实例走三级
+              // 动作表 + 5 秒撤销）。颜色、位置、确认强度三者仍完全分离（Q5）。
+              FormCard(
+                footer: task.isPeriodic
+                    ? '周期实例可选择「只删这一次 / 删该事项的未来待办 / 删整个周期」'
+                    : null,
+                children: <Widget>[
+                  FormRow(
+                    label: task.isCompleted ? '取消完成' : '标记完成',
+                    labelColor: task.isCompleted
+                        ? const Color(0xFF8E8E93)
+                        : const Color(0xFF34C759),
+                    minHeight: 54,
+                    leading: Icon(
+                      task.isCompleted
+                          ? CupertinoIcons.arrow_counterclockwise
+                          : CupertinoIcons.checkmark_circle_fill,
+                      size: 20,
+                      color: task.isCompleted
+                          ? const Color(0xFF8E8E93)
+                          : const Color(0xFF34C759),
+                    ),
+                    onTap: _saving ? null : () => _toggleComplete(task),
                   ),
-                ),
-              ),
-              if (task.isPeriodic)
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: Text(
-                    '周期实例可选择「只删这一次 / 删该事项的未来待办 / 删整个周期」',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11.5, color: Color(0xFF8E8E93)),
+                  FormRow(
+                    label: '删除待办',
+                    labelColor: const Color(0xFFFF3B30),
+                    minHeight: 54,
+                    leading: const Icon(
+                      CupertinoIcons.trash,
+                      size: 20,
+                      color: Color(0xFFFF3B30),
+                    ),
+                    onTap: _saving ? null : () => _delete(task),
                   ),
-                ),
+                ],
+              ),
             ],
           ],
         ),
@@ -392,6 +393,24 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
       _isNew && widget.initialDate == null
           ? DateUtil.formatTime(DateTime.now())
           : null;
+
+  /// 标记完成 / 取消完成：状态即时落库，成功后**直接返回上一页**（N20）。
+  ///
+  /// 完成状态本身就是一次写操作，不需要用户再点「保存」；若此前还改过其它字段，
+  /// 先按最新库值把编辑落盘再退出，避免静默丢弃（`_save` 成功后自行 pop）。
+  Future<void> _toggleComplete(Todo task) async {
+    final ok = await toggleTodoComplete(context, ref, task);
+    if (!ok || !mounted) return;
+    if (_dirty) {
+      final latest = await ref.read(todoDetailProvider(task.id!).future);
+      if (!mounted) return;
+      if (latest != null) {
+        await _save(latest);
+        return;
+      }
+    }
+    Navigator.of(context).pop(true);
+  }
 
   Future<void> _save(Todo? existing) async {
     final title = _titleController.text.trim();

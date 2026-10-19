@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,8 +39,10 @@ Future<void> openTodoEdit(
   );
 }
 
-/// 勾选 / 取消勾选（绿色圆圈，无需确认、可逆）
-Future<void> toggleTodoComplete(
+/// 勾选 / 取消勾选（绿色圆圈，无需确认、可逆）。
+///
+/// 返回是否写入成功：编辑页据此决定「完成后直接返回上一页」与否（失败时留在原页）。
+Future<bool> toggleTodoComplete(
   BuildContext context,
   WidgetRef ref,
   Todo task,
@@ -47,9 +51,12 @@ Future<void> toggleTodoComplete(
   try {
     await ref.read(taskRepositoryProvider).toggleComplete(task.id!, to: target);
     invalidateAfterTaskWrite(ref.invalidate, periodicId: task.periodicId);
-    await HapticFeedback.lightImpact();
+    // 触感反馈不参与业务结果：不等它完成，避免平台通道卡住后续流程（如编辑页回退）
+    unawaited(HapticFeedback.lightImpact());
+    return true;
   } catch (error) {
     if (context.mounted) await showActionError(context, error);
+    return false;
   }
 }
 

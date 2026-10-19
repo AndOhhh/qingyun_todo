@@ -72,6 +72,13 @@ class FormCard extends StatelessWidget {
 /// 表单行：左标签 + 右值 / 控件，整行可点击
 class FormRow extends StatelessWidget {
   final String label;
+
+  /// 标签颜色（动作行用：绿 = 完成 / 红 = 删除）
+  final Color? labelColor;
+
+  /// 行首图标（动作行用）
+  final Widget? leading;
+
   final String? valueText;
   final Color? valueColor;
   final Widget? trailing;
@@ -82,6 +89,8 @@ class FormRow extends StatelessWidget {
   const FormRow({
     super.key,
     required this.label,
+    this.labelColor,
+    this.leading,
     this.valueText,
     this.valueColor,
     this.trailing,
@@ -100,12 +109,16 @@ class FormRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: <Widget>[
+            if (leading != null) ...<Widget>[
+              leading!,
+              const SizedBox(width: 8),
+            ],
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF1C1C1E),
+                color: labelColor ?? const Color(0xFF1C1C1E),
               ),
             ),
             const SizedBox(width: 12),
