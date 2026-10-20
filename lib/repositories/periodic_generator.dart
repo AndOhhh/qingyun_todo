@@ -18,10 +18,13 @@ import 'package:qingyun_todo/utils/db_helper.dart';
 ///
 /// - **本轮未结束** → 不生成任何后续轮次；
 /// - **本轮全部完成** → 生成下一轮（`PeriodicCompletion` 触发，见触发时机③）；
+///   **下一轮的实例一旦生成就保留**：用户若把上一轮改回未完成，下一轮只是暂时被
+///   `PeriodicRoundPolicy.visibleOnTodoPage` 隐藏，等本轮再次完成即可直接复用，
+///   不会被删除（N21：修复「取消完成后重启丢待办」）；
 /// - **本轮整轮逾期** → 顺延生成「今天所在轮」，错过那一轮的遗留实例保留在库中
 ///   （不再补历史轮次，也不删用户数据）；
-/// - **旧口径遗留清理**：晚于本轮的未完成实例在生成时删除，让已升级的库自动收敛
-///   到一轮一期（已完成的实例作为历史保留）。
+/// - **不在生成路径上做「旧口径清理」**：早期 30 天窗口遗留的未完成实例只在
+///   `rebuildPending`（规则变更重建）时清理，避免误删用户已看到的待办。
 ///
 /// - **规则/日期变更重建**（N14）：起始日 / 间隔 / 事项天序-提醒时间变更时，
 ///   未完成计划按新规则从「今天所在轮」重建（[rebuildPending]）——否则旧实例会把
@@ -138,8 +141,10 @@ class PeriodicGenerator {
           from: day,
           executor: e,
         );
-        // 旧口径遗留：晚于本轮的未完成实例不再属于「当期」，删除收敛
-        await _pruneAfterCycle(e, periodic.id!, ceiling);
+        // 不在此处清理晚于本轮的未完成实例（N21）：
+        // 「本轮完成后生成下一轮」会正常产生一条下一轮实例；若用户随后取消完成，
+        // 启动时按「当前轮」把它删掉就会造成静默丢数据。晚于本轮的实例交给
+        // PeriodicRoundPolicy 隐藏，规则变更时由 rebuildPending 统一重建。
       }
       return inserted;
     }
@@ -212,10 +217,12 @@ class PeriodicGenerator {
     return inserted;
   }
 
-  /// 删除晚于本轮 ceiling 的未完成实例（旧「30 天窗口」口径的遗留）。
+  /// 删除晚于本轮 ceiling 的未完成实例（**仅在 [rebuildPending] 的重建路径使用**）。
   ///
-  /// 已完成实例属于历史，一律保留；早于本轮的未完成实例（错过的那一轮）同样保留，
-  /// 由 [PeriodicRoundPolicy.visibleOnTodoPage] 决定是否展示。
+  /// 普通生成路径不再调用它（N21）：那会把「本轮完成后刚生成的下一轮」在用户
+  /// 取消完成后的下一次启动时静默删掉。已完成实例属于历史，一律保留；早于本轮的
+  /// 未完成实例（错过的那一轮）同样保留，由 [PeriodicRoundPolicy.visibleOnTodoPage]
+  /// 决定是否展示。
   Future<void> _pruneAfterCycle(
     DatabaseExecutor e,
     int periodicId,

@@ -1,11 +1,13 @@
 import 'package:sqflite/sqflite.dart';
 
+import 'package:qingyun_todo/models/cycle_rule.dart';
 import 'package:qingyun_todo/models/periodic.dart';
 import 'package:qingyun_todo/models/periodic_item.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/repositories/periodic_completion.dart';
 import 'package:qingyun_todo/repositories/periodic_item_repository.dart';
 import 'package:qingyun_todo/repositories/periodic_generator.dart';
+import 'package:qingyun_todo/repositories/periodic_round_policy.dart';
 import 'package:qingyun_todo/utils/app_exception.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
 import 'package:qingyun_todo/utils/db_helper.dart';
@@ -283,9 +285,20 @@ class PeriodicRepository {
       orderBy: 'remind_date ASC, '
           'CASE WHEN remind_time IS NULL THEN 1 ELSE 0 END, remind_time ASC',
     );
+
+    final today = DateUtil.today();
+    final progressByPeriodic = <int, CycleProgress?>{
+      for (final p in periodics)
+        p.id!: _currentCycleOf(p.rule, stats[p.id] ?? const <_CycleStat>[], today),
+    };
+
+    // ③ 「下次提醒」只取本轮实例：与待办页可见性同口径（N21），
+    //    避免把「已生成但被隐藏」的下一轮实例当成下一条提醒。
     final nextRemind = <int, Todo>{};
     for (final row in nextRows) {
       final task = Todo.fromMap(row);
+      final current = progressByPeriodic[task.periodicId!];
+      if (current == null || task.cycleIndex != current.cycleIndex) continue;
       nextRemind.putIfAbsent(task.periodicId!, () => task);
     }
 
@@ -293,60 +306,82 @@ class PeriodicRepository {
         .map(
           (p) => PeriodicListEntry(
             periodic: p,
-            currentCycle: _pickCurrentCycle(stats[p.id] ?? const <_CycleStat>[]),
+            currentCycle: progressByPeriodic[p.id],
             nextRemind: nextRemind[p.id],
           ),
         )
         .toList(growable: false);
   }
 
-  /// 「当前轮」= 最早一个仍有未完成实例的轮；全部完成则取最后一轮
-  static CycleProgress? _pickCurrentCycle(List<_CycleStat> stats) {
+  /// 本轮进度：**与生成引擎、待办页共用 [PeriodicRoundPolicy]**（N21）。
+  ///
+  /// 旧实现取「最早一个有未完成实例的轮」，不判断该轮窗口是否已整轮逾期，
+  /// 导致「待办页已经推进到第 41 轮、周期卡片却永远停在第 11 轮」。
+  static CycleProgress? _currentCycleOf(
+    CycleRule rule,
+    List<_CycleStat> stats,
+    DateTime today,
+  ) {
     if (stats.isEmpty) return null;
-    final sorted = stats.toList()..sort((a, b) => a.cycleIndex.compareTo(b.cycleIndex));
-    for (final s in sorted) {
-      if (s.done < s.total) {
-        return CycleProgress(cycleIndex: s.cycleIndex, done: s.done, total: s.total);
+    final round = PeriodicRoundPolicy.currentRound(
+      rule: rule,
+      instances: <RoundInstance>[
+        for (final s in stats)
+          RoundInstance(s.cycleIndex, isCompleted: s.done >= s.total),
+      ],
+      today: today,
+    );
+    for (final s in stats) {
+      if (s.cycleIndex == round) {
+        return CycleProgress(
+          cycleIndex: round,
+          done: s.done,
+          total: s.total,
+        );
       }
     }
-    final last = sorted.last;
-    return CycleProgress(cycleIndex: last.cycleIndex, done: last.done, total: last.total);
+    // 本轮尚未生成实例（例如全部轮次刚完成）：交给卡片显示「暂无进行中的轮次」
+    return null;
   }
 
   /// 本轮进度 `x/y`（docs/02 §8.7）；该周期尚无实例时返回 null
+  ///
+  /// 口径与 [queryListWithProgress] / 待办页一致：统一走 [PeriodicRoundPolicy]（N21）。
   Future<CycleProgress?> queryCurrentCycleProgress(int id) async {
     final db = await _db;
-    final pending = await db.rawQuery(
-      '''
-      SELECT cycle_index FROM tasks
-      WHERE periodic_id = ? AND cycle_index IS NOT NULL AND is_completed = 0
-      ORDER BY remind_date ASC LIMIT 1
-      ''',
-      <Object?>[id],
+    final periodic = await findById(id);
+    if (periodic == null) return null;
+    final instanceRows = await db.query(
+      Todo.table,
+      columns: <String>['cycle_index', 'is_completed'],
+      where: 'periodic_id = ? AND cycle_index IS NOT NULL',
+      whereArgs: <Object?>[id],
     );
-    int? cycleIndex;
-    if (pending.isNotEmpty) {
-      cycleIndex = (pending.first['cycle_index'] as num).toInt();
-    } else {
-      final maxRows = await db.rawQuery(
-        'SELECT MAX(cycle_index) AS mx FROM tasks '
-        'WHERE periodic_id = ? AND cycle_index IS NOT NULL',
-        <Object?>[id],
-      );
-      final mx = maxRows.first['mx'];
-      cycleIndex = mx == null ? null : (mx as num).toInt();
-    }
-    if (cycleIndex == null) return null;
+    if (instanceRows.isEmpty) return null;
+    final instances = <RoundInstance>[
+      for (final r in instanceRows)
+        RoundInstance(
+          (r['cycle_index'] as num).toInt(),
+          isCompleted: ((r['is_completed'] as num?)?.toInt() ?? 0) == 1,
+        ),
+    ];
+    final cycleIndex = PeriodicRoundPolicy.currentRound(
+      rule: periodic.rule,
+      instances: instances,
+      today: DateUtil.today(),
+    );
     final rows = await db.rawQuery(
       'SELECT COUNT(*) AS total, COALESCE(SUM(is_completed), 0) AS done '
       'FROM tasks WHERE periodic_id = ? AND cycle_index = ?',
       <Object?>[id, cycleIndex],
     );
     final row = rows.first;
+    final total = (row['total'] as num?)?.toInt() ?? 0;
+    if (total == 0) return null;
     return CycleProgress(
       cycleIndex: cycleIndex,
       done: (row['done'] as num?)?.toInt() ?? 0,
-      total: (row['total'] as num?)?.toInt() ?? 0,
+      total: total,
     );
   }
 

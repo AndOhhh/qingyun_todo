@@ -4,6 +4,7 @@ import 'package:qingyun_todo/models/periodic.dart';
 import 'package:qingyun_todo/models/periodic_item.dart';
 import 'package:qingyun_todo/models/todo.dart';
 import 'package:qingyun_todo/models/todo_priority.dart';
+import 'package:qingyun_todo/repositories/periodic_round_policy.dart';
 import 'package:qingyun_todo/utils/app_exception.dart';
 import 'package:qingyun_todo/utils/date_util.dart';
 import 'package:sqflite/sqflite.dart';
@@ -423,7 +424,7 @@ void main() {
       expect(instances.first.cycleIndex, 0);
     });
 
-    test('旧口径遗留：晚于本轮的未完成实例在生成时清理，已完成实例作为历史保留', () async {
+    test('旧口径遗留：未来轮的未完成实例保留（不再静默删除），已完成作为历史保留', () async {
       final id = await store.periodics.insert(
         buildPeriodic(value: 2),
         items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
@@ -458,10 +459,13 @@ void main() {
       final rounds = (await instancesOf(id))
           .map((t) => '${t.cycleIndex}:${t.isCompleted ? 1 : 0}')
           .toList();
+      // N21：生成路径不再「收敛清理」晚于本轮的实例 —— 删除会误伤
+      // 「本轮完成后刚生成的下一轮」（取消完成后重启即丢）。展示层照旧按
+      // 一轮一期隐藏，数据保留。
       expect(
         rounds,
-        <String>['0:0', '3:1'],
-        reason: '本轮保留；未来未完成轮被清理；未来已完成轮作为历史保留',
+        <String>['0:0', '1:0', '2:0', '3:1'],
+        reason: '未来未完成轮保留在库中（仅不展示），已完成轮作为历史保留',
       );
     });
 
@@ -1041,6 +1045,124 @@ void main() {
       expect(after.length, 2,
           reason: '今天 1 条 + 已完成的明天 1 条；+2 那条被删且不复活');
       expect(after.any((t) => t.id == instances[1].id && t.isCompleted), isTrue);
+    });
+  });
+
+  group('N21 / N22：轮次推进与删除口径', () {
+    test('取消完成后重启：已生成的下一轮待办不会被静默删除', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(),
+        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '喝水')],
+      );
+      var instances = await instancesOf(id);
+      expect(instances, hasLength(1));
+
+      // 完成本轮 → 自动生成下一轮（明天）
+      await store.tasks.toggleComplete(instances.single.id!, to: true);
+      instances = await instancesOf(id);
+      expect(instances, hasLength(2), reason: '本轮完结 → 生成下一轮');
+
+      // 反悔：取消完成今天这条
+      final todayTask = instances.firstWhere(
+        (t) => DateUtil.formatDate(t.remindDate) == DateUtil.formatDate(today),
+      );
+      await store.tasks.toggleComplete(todayTask.id!, to: false);
+
+      // 模拟下次启动（bootstrap 会调用 generateCurrentRounds）
+      await store.generator.generateCurrentRounds();
+
+      final after = await instancesOf(id);
+      expect(after, hasLength(2), reason: '下一轮实例必须保留（只是暂时不展示）');
+      expect(
+        after
+            .where((t) => !t.isCompleted)
+            .map((t) => DateUtil.formatDate(t.remindDate))
+            .toSet(),
+        <String>{
+          DateUtil.formatDate(today),
+          DateUtil.formatDate(DateUtil.addDays(today, 1)),
+        },
+      );
+    });
+
+    test('整轮逾期后：周期详情/列表的「当前轮」与待办页口径一致', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(startDate: DateUtil.addDays(today, -40)),
+        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '打卡')],
+      );
+      final itemId = (await store.items.queryByPeriodicId(id)).single.id!;
+      // 手工补一条 30 天前错过的未完成实例（第 10 轮，窗口早已结束）
+      final missed = DateUtil.addDays(today, -30);
+      await (await store.db.database).insert('tasks', <String, Object?>{
+        'title': '打卡（错过）',
+        'remind_date': DateUtil.formatDate(missed),
+        'priority': 'none',
+        'is_completed': 0,
+        'source_type': 'PERIODIC',
+        'periodic_id': id,
+        'periodic_item_id': itemId,
+        'cycle_index': 10,
+        'periodic_name_snapshot': '测试周期',
+        'sort_order': 0,
+        'is_notified': 0,
+        'created_at': DateUtil.formatTimestamp(DateTime.now()),
+        'updated_at': DateUtil.formatTimestamp(DateTime.now()),
+      });
+
+      final policyRound = PeriodicRoundPolicy.currentRound(
+        rule: (await store.periodics.findById(id))!.rule,
+        instances: (await instancesOf(id))
+            .map((t) => RoundInstance(t.cycleIndex!, isCompleted: t.isCompleted))
+            .toList(),
+        today: today,
+      );
+      expect(policyRound, 40, reason: '整轮逾期 → 顺延到今天所在轮');
+
+      final detail = await store.periodics.queryDetail(id);
+      expect(detail!.currentCycle!.cycleIndex, policyRound,
+          reason: '详情页「当前轮」必须与生成引擎/待办页同源');
+      final list = await store.periodics.queryListWithProgress();
+      expect(list.single.currentCycle!.cycleIndex, policyRound,
+          reason: '列表卡片「当前轮」同源');
+    });
+
+    test('逾期实例：「删除该事项的未来待办」连同被点的这条一起删除', () async {
+      final id = await store.periodics.insert(
+        buildPeriodic(startDate: DateUtil.addDays(today, -2)),
+        items: <PeriodicItem>[buildItem(dayOffset: 0, title: '喝水')],
+      );
+      final itemId = (await store.items.queryByPeriodicId(id)).single.id!;
+      final overdue = DateUtil.addDays(today, -1);
+      final overdueId = await (await store.db.database).insert(
+        'tasks',
+        <String, Object?>{
+          'title': '喝水（逾期）',
+          'remind_date': DateUtil.formatDate(overdue),
+          'priority': 'none',
+          'is_completed': 0,
+          'source_type': 'PERIODIC',
+          'periodic_id': id,
+          'periodic_item_id': itemId,
+          'cycle_index': 1,
+          'periodic_name_snapshot': '测试周期',
+          'sort_order': 0,
+          'is_notified': 0,
+          'created_at': DateUtil.formatTimestamp(DateTime.now()),
+          'updated_at': DateUtil.formatTimestamp(DateTime.now()),
+        },
+      );
+
+      // todo_actions 对逾期实例传 fromDate = 实例日期（N22）
+      expect(
+        await store.items.countFutureInstances(itemId, fromDate: overdue),
+        greaterThanOrEqualTo(2),
+        reason: '逾期这条 + 今天的这条',
+      );
+      final removed =
+          await store.items.deleteFutureInstances(itemId, fromDate: overdue);
+      expect(removed, greaterThanOrEqualTo(2));
+      expect(await store.tasks.findById(overdueId), isNull,
+          reason: '用户点的那条逾期实例必须被删除');
     });
   });
 }

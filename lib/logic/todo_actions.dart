@@ -118,6 +118,12 @@ Future<void> _deletePeriodicInstance(
   final itemId = task.periodicItemId!;
 
   // 先算影响面再展示（docs/07 C6-2）
+  // 逾期实例：选项「删除该事项的未来待办」的语义应为「这一条 + 之后」，
+  // 否则只删 `remind_date >= today` 会把用户点的那条逾期实例留下来（N22）。
+  final today = DateUtil.today();
+  final overdueFrom = DateUtil.dateOnly(task.remindDate).isBefore(today)
+      ? DateUtil.dateOnly(task.remindDate)
+      : null;
   final PeriodicDeleteResult preview;
   final int futureCount;
   try {
@@ -126,7 +132,7 @@ Future<void> _deletePeriodicInstance(
         .previewDelete(periodicId);
     futureCount = await container
         .read(periodicItemRepositoryProvider)
-        .countFutureInstances(itemId);
+        .countFutureInstances(itemId, fromDate: overdueFrom);
   } catch (error) {
     if (context.mounted) await showActionError(context, error);
     return;
@@ -181,7 +187,7 @@ Future<void> _deletePeriodicInstance(
         action: () async {
           await container
               .read(periodicItemRepositoryProvider)
-              .deleteFutureInstances(itemId);
+              .deleteFutureInstances(itemId, fromDate: overdueFrom);
           return const <Todo>[];
         },
       );
