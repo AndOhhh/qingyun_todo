@@ -103,14 +103,19 @@ class TodayProgress extends StatelessWidget {
           _buildBar(percent),
           const SizedBox(height: 8),
           Text(
-            percent >= 1.0
-                ? '今日任务全部完成 ✓'
-                : '还差 ${total - done} 项任务，加油',
+            _hint(percent),
             style: const TextStyle(fontSize: 12, color: Color(0xFF636366)),
           ),
         ],
       ),
     );
+  }
+
+  /// 底部鼓励文案；今天没有安排时不显示「还差 0 项任务」
+  String _hint(double percent) {
+    if (total == 0) return '今天还没有安排待办';
+    if (percent >= 1.0) return '今日任务全部完成 ✓';
+    return '还差 ${total - done} 项任务，加油';
   }
 
   /// 渐变进度条（蓝 → 绿）

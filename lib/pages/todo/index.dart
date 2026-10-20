@@ -1,185 +1,228 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:qingyun_todo/components/empty_state.dart';
+import 'package:qingyun_todo/components/error_state.dart';
+import 'package:qingyun_todo/components/notification_banner.dart';
+import 'package:qingyun_todo/components/floating_add_button.dart';
+import 'package:qingyun_todo/constants/routes.dart';
+import 'package:qingyun_todo/logic/todo_actions.dart';
 import 'package:qingyun_todo/models/todo.dart';
-import 'package:qingyun_todo/pages/todo/widgets/todo_card.dart';
+import 'package:qingyun_todo/models/todo_groups.dart';
 import 'package:qingyun_todo/pages/todo/widgets/section_header.dart';
+import 'package:qingyun_todo/pages/todo/widgets/todo_card.dart';
 import 'package:qingyun_todo/pages/todo/widgets/today_progress.dart';
+import 'package:qingyun_todo/stores/todo_store.dart';
+import 'package:qingyun_todo/services/notification_service.dart';
+import 'package:qingyun_todo/stores/db_providers.dart';
 
-class TodoView extends StatefulWidget {
+/// 待办页：今日进度卡 + 五组列表（逾期 / 今天 / 明天 / 后续 / 已完成）。
+///
+/// 数据**全部来自 SQLite**（`todoGroupsProvider` / `todayProgressProvider`），
+/// 页面只负责渲染与派发意图（docs/04 §2 分层约定）。
+class TodoView extends ConsumerStatefulWidget {
   const TodoView({super.key});
 
   @override
-  State<TodoView> createState() => _TodoViewState();
+  ConsumerState<TodoView> createState() => _TodoViewState();
 }
 
-class _TodoViewState extends State<TodoView> {
-  // mock 数据
-  final List<Todo> _todos = [
-    Todo(
-      id: '1',
-      title: '计算机证书考试',
-      note: '复习第 3 章操作系统',
-      dueDate: DateTime(2026, 8, 20),
-      isOverdue: true,
-      subDone: 7,
-      subTotal: 12,
-      priority: TodoPriority.high,
-      accentColor: const Color(0xFFFF3B30),
-    ),
-    Todo(
-      id: '2',
-      title: '晨跑 5 公里',
-      isPeriodic: true,
-      dueDate: DateTime(2026, 8, 17),
-      subDone: 3,
-      subTotal: 5,
-      priority: TodoPriority.medium,
-      accentColor: const Color(0xFFFF9500),
-    ),
-    Todo(
-      id: '3',
-      title: '阅读《设计的法则》',
-      note: '第 4-6 章',
-      dueDate: DateTime(2026, 8, 19),
-      isOverdue: true,
-      isPeriodic: true,
-      subDone: 2,
-      subTotal: 8,
-      priority: TodoPriority.low,
-      accentColor: const Color(0xFFFFCC00),
-    ),
-    Todo(
-      id: '4',
-      title: '整理周报',
-      dueDate: DateTime(2026, 8, 18),
-      priority: TodoPriority.medium,
-      accentColor: const Color(0xFF34C759),
-    ),
-    Todo(
-      id: '5',
-      title: '学 Flutter 动画',
-      note: 'Hero / ImplicitAnimations',
-      dueDate: DateTime(2026, 8, 22),
-      subDone: 1,
-      subTotal: 4,
-      priority: TodoPriority.low,
-      accentColor: const Color(0xFF007AFF),
-    ),
-    Todo(
-      id: '6',
-      title: '给爸妈打电话',
-      done: true,
-      accentColor: const Color(0xFF5856D6),
-    ),
-  ];
+class _TodoViewState extends ConsumerState<TodoView> {
+  /// 「已完成」分组是否展开（Q10：默认折叠）。
+  /// 纯 UI 偏好，按 docs/07 §A.1 的边界约定留在 Widget 内，不进 provider。
+  bool _showCompleted = false;
 
-  bool _showCompleted = true;
+  /// 通知自检结果；仅当存在阻断项时展示横幅
+  NotificationHealth? _health;
+  bool _healthDismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshHealth();
+    });
+  }
+
+  Future<void> _refreshHealth() async {
+    final health =
+        await ref.read(notificationServiceProvider).checkHealth();
+    if (!mounted) return;
+    setState(() => _health = health);
+  }
+
+  /// 打开「通知收不到？」引导页：横幅与导航栏铃铛共用入口。
+  /// 返回后重新自检，让横幅立即反映用户刚改过的系统设置。
+  Future<void> _openNotificationGuide() async {
+    await Navigator.of(context).pushNamed(RouteConstants.notificationGuide);
+    if (!mounted) return;
+    await _refreshHealth();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pending = _todos.where((t) => !t.done).toList();
-    final completed = _todos.where((t) => t.done).toList();
+    final groupsAsync = ref.watch(todoGroupsProvider);
+    final progressAsync = ref.watch(todayProgressProvider);
 
     return CupertinoTheme(
-      data: CupertinoThemeData(
-        primaryColor: const Color(0xFF007AFF),
-        scaffoldBackgroundColor: const Color(0xFFF2F2F7),
+      data: const CupertinoThemeData(
+        primaryColor: Color(0xFF007AFF),
+        scaffoldBackgroundColor: Color(0xFFF2F2F7),
       ),
-      child: CustomScrollView(
+      child: Stack(
+        children: <Widget>[
+          CustomScrollView(
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
-        slivers: [
-          // 顶部大标题
+        slivers: <Widget>[
           CupertinoSliverNavigationBar(
             backgroundColor: const Color(0xFFF2F2F7),
-            largeTitle: Text('待办', style: TextStyle(color: Colors.black)),
-            trailing: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: _handleAdd,
-              child: const Icon(
-                CupertinoIcons.add_circled,
-                size: 26,
-                color: Color(0xFF007AFF),
-              ),
+            // IndexedStack 会同时持有多个带大标题导航栏的页面，
+            // 必须给每页唯一 heroTag，否则路由切换时报「multiple heroes share the same tag」
+            heroTag: 'todo-large-title',
+                // 去掉大标题导航栏底部的发丝分割线（视觉更干净）
+                border: null,
+            largeTitle: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                const Text('待办', style: TextStyle(color: Colors.black)),
+                // 通知诊断入口紧贴大标题之后（而非贴最右）
+                // translate：中文大标题字形在 34pt 行框里偏下，图标需下沉做光学对齐
+                Transform.translate(
+                  offset: const Offset(0, 7),
+                  child: Semantics(
+                    button: true,
+                    label: '通知收不到？查看诊断与厂商设置引导',
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: _openNotificationGuide,
+                      child: const Icon(
+                        CupertinoIcons.bell,
+                        size: 22,
+                        color: Color(0xFF007AFF),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          // 当日任务进度条
+          // 通知自检横幅：权限/精确闹钟被拒时给出原因与一键修复
+          if (_health != null &&
+              !_healthDismissed &&
+              _health!.blocker != NotificationBlocker.none &&
+              _health!.blocker != NotificationBlocker.unavailable)
+            SliverToBoxAdapter(
+              child: NotificationBanner(
+                health: _health!,
+                onDismiss: () => setState(() => _healthDismissed = true),
+                onFix: _openNotificationGuide,
+                onFixed: _refreshHealth,
+              ),
+            ),
+          // 下拉刷新：重取分组与今日进度
+          CupertinoSliverRefreshControl(
+            onRefresh: () async {
+              ref
+                ..invalidate(todoGroupsProvider)
+                ..invalidate(todayProgressProvider);
+              await ref.read(todoGroupsProvider.future);
+            },
+          ),
+          // 当日任务进度条（口径：仅 remind_date = today，修 R5）
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: TodayProgress(
-                total: _todos.length,
-                done: _todos.where((t) => t.done).length,
+              child: progressAsync.when(
+                loading: () => const _ProgressSkeleton(),
+                error: (error, _) => const SizedBox(height: 96),
+                data: (progress) =>
+                    TodayProgress(total: progress.total, done: progress.done),
               ),
             ),
           ),
-          // 待办分组标题 + 卡片
-          if (pending.isNotEmpty) ...[
-            _sectionSliver(
-              padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
-              child: SectionHeader(title: '待处理', count: pending.length),
-            ),
-            _cardListSliver(pending),
-          ],
-          // 已完成分组标题 + 卡片（可折叠）
-          if (completed.isNotEmpty) ...[
-            _sectionSliver(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
-              child: SectionHeader(
-                title: '已完成',
-                count: completed.length,
-                expanded: _showCompleted,
-                onTap: () =>
-                    setState(() => _showCompleted = !_showCompleted),
+          ...groupsAsync.when(
+            loading: () => <Widget>[
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CupertinoActivityIndicator(radius: 14)),
               ),
-            ),
-            if (_showCompleted) _cardListSliver(completed),
-          ],
-          // 空状态
-          if (_todos.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 100),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(
-                      CupertinoIcons.checkmark_seal_fill,
-                      size: 64,
-                      color: Color(0xFF34C759),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      '全部搞定！',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1C1C1E),
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      '点击右上角添加新待办',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF8E8E93),
-                      ),
-                    ),
-                  ],
+            ],
+            error: (error, _) => <Widget>[
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: ErrorState(
+                  error: error,
+                  title: '待办加载失败',
+                  onRetry: () => ref.invalidate(todoGroupsProvider),
                 ),
               ),
+            ],
+            data: _buildSections,
+          ),
+          // 底部留白：避让悬浮导航栏与浮动按钮
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
+        ],
+      ),
+          // 右下角浮动新增按钮（替代原导航栏右上角 +）
+          Positioned(
+            right: 16,
+            bottom: floatingBottomOffset(context),
+            child: FloatingAddButton(
+              semanticLabel: '新建待办',
+              onPressed: () => openTodoEdit(context),
             ),
-          // 底部留白
-          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+          ),
         ],
       ),
     );
   }
 
-  /// 分组标题 Sliver
+  List<Widget> _buildSections(TodoGroups groups) {
+    if (groups.isEmpty) {
+      return <Widget>[
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 100),
+            // 与周期页空态一致：不放居中新建按钮（与右下角 FAB 重复），只给引导文案
+            child: EmptyState(
+              icon: CupertinoIcons.checkmark_seal_fill,
+              title: '全部搞定！',
+              subtitle: '点击右下角的蓝色 + 按钮添加待办，\n'
+                  '或在「周期」页安排重复事项',
+            ),
+          ),
+        ),
+      ];
+    }
+
+    final widgets = <Widget>[];
+    for (final section in groups.sections) {
+      if (section.isEmpty) continue; // 空分组不渲染
+      final expanded = section.collapsible ? _showCompleted : true;
+      widgets.add(
+        _sectionSliver(
+          padding: EdgeInsets.fromLTRB(20, section == groups.sections.first ? 6 : 12, 20, 10),
+          child: SectionHeader(
+            title: section.title,
+            count: section.count,
+            color: section.color,
+            expanded: section.collapsible ? _showCompleted : null,
+            onTap: section.collapsible
+                ? () => setState(() => _showCompleted = !_showCompleted)
+                : null,
+          ),
+        ),
+      );
+      if (expanded) widgets.add(_cardListSliver(section.items));
+    }
+    return widgets;
+  }
+
   SliverToBoxAdapter _sectionSliver({
     required EdgeInsets padding,
     required Widget child,
@@ -189,26 +232,42 @@ class _TodoViewState extends State<TodoView> {
     );
   }
 
-  /// 卡片列表 Sliver
   SliverPadding _cardListSliver(List<Todo> todos) {
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       sliver: SliverList.builder(
         itemCount: todos.length,
-        itemBuilder: (context, index) =>
-            TodoCard(todo: todos[index], onToggle: _toggle),
+        itemBuilder: (context, index) {
+          final task = todos[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: TodoCard(
+              todo: task,
+              onToggle: (_) => toggleTodoComplete(context, ref, task),
+              onTap: () => openTodoEdit(context, taskId: task.id),
+            ),
+          );
+        },
       ),
     );
   }
+}
 
-  void _toggle(String id) {
-    setState(() {
-      final t = _todos.firstWhere((e) => e.id == id);
-      t.done = !t.done;
-    });
-  }
+/// 今日进度卡骨架屏（避免加载时页面跳动）
+class _ProgressSkeleton extends StatelessWidget {
+  const _ProgressSkeleton();
 
-  void _handleAdd() {
-    // TODO：后续接入状态管理后触发添加逻辑
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 132,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Center(
+        child: CupertinoActivityIndicator(radius: 11),
+      ),
+    );
   }
 }

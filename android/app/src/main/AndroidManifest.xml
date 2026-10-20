@@ -1,6 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- FR-19 本地提醒：Android 13+ 通知权限 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 精确闹钟：保证到点准时提醒（Android 12+）。
+         用 USE_EXACT_ALARM 而非 SCHEDULE_EXACT_ALARM：后者在 Android 14+（targetSdk 34+）
+         新装应用默认被拒，排期会降级为非精确闹钟，ColorOS 等 ROM 下可能被大幅延迟甚至冻结。
+         USE_EXACT_ALARM 由系统直接授予、无需用户操作，适用于「定时提醒为核心功能」的应用
+         （flutter_local_notifications 官方示例同款做法）；若上架 Google Play 审核有顾虑，
+         可改回 SCHEDULE_EXACT_ALARM，并依赖应用内的「去开启」横幅引导用户手动授权。 -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- 开机后恢复已排期的提醒 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
-        android:label="qingyun_todo"
+        android:label="轻云"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -8,6 +19,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
+            android:screenOrientation="portrait"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -30,6 +42,24 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- flutter_local_notifications 到点接收器：zonedSchedule 排期的闹钟触发时，
+             AlarmManager 会向该 receiver 发广播来弹出通知。插件 v16+ 不再自带清单声明，
+             缺失时广播被系统静默丢弃 → 前台/后台/杀进程全都收不到排期通知
+             （Android 15 上三种状态均不通知的根因）。 -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <!-- 重启 / 应用更新后恢复已排期的提醒 -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
