@@ -152,7 +152,8 @@ flutter build apk --release # 或 --split-per-abi / appbundle
 - [ ] 配置 release keystore 与 `signingConfigs.release`（现在 release 仍用 debug 签名）
 - [ ] iOS `PRODUCT_BUNDLE_IDENTIFIER` 换成自有域名（现在 `com.example.qingyunTodo`）
 - [x] 应用名称：**轻云**（`android:label` / iOS `CFBundleDisplayName` / `MaterialApp.title` / 应用内引导文案）
-- [ ] 应用图标与启动图
+- [x] **应用图标**：蓝色渐变 + 白云 + 琥珀对勾（iOS 全尺寸 / Android 自适应 + 旧版 PNG）
+- [x] **启动页**：品牌底色 `#F2F2F7` + 应用图标（Android 12+ 系统 SplashScreen / iOS LaunchScreen）
 - [ ] 隐私政策页面 / URL（即使不收集任何数据也需要）
 - [ ] 版本号：`pubspec.yaml` 的 `version: 1.0.0+1`
 - [ ] 构建产物：优先 AAB；国内渠道用 `flutter build apk --release --split-per-abi`（universal APK 约 61MB）

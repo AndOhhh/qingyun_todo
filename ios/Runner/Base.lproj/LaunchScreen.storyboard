@@ -14,15 +14,35 @@
                         <viewControllerLayoutGuide type="bottom" id="xbc-2k-c8Z"/>
                     </layoutGuides>
                     <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                        <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="YRO-k0-Ey4">
+                            <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" image="LaunchMark" translatesAutoresizingMaskIntoConstraints="NO" id="Lmg-Sp-La1">
+                                <rect key="frame" x="139.5" y="245.5" width="96" height="96"/>
                             </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="轻云" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Lbl-Sp-Nm1">
+                                <rect key="frame" x="160.5" y="359.5" width="54" height="38.5"/>
+                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="32"/>
+                                <color key="textColor" red="0.10980392156862745" green="0.10980392156862745" blue="0.11764705882352941" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="把每天的事，安排得轻一点" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Lbl-Sp-Tg1">
+                                <rect key="frame" x="115.5" y="404" width="144.5" height="16"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="13"/>
+                                <color key="textColor" red="0.55686274509803924" green="0.55686274509803924" blue="0.57647058823529407" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
-                        <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="1a2-6s-vTC"/>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="4X2-HB-R7a"/>
+                            <constraint firstItem="Lmg-Sp-La1" firstAttribute="width" constant="96" id="a01-la-wd"/>
+                            <constraint firstItem="Lmg-Sp-La1" firstAttribute="height" constant="96" id="a02-la-ht"/>
+                            <constraint firstItem="Lmg-Sp-La1" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="a03-la-cx"/>
+                            <constraint firstItem="Lmg-Sp-La1" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-40" id="a04-la-cy"/>
+                            <constraint firstItem="Lbl-Sp-Nm1" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="a05-nm-cx"/>
+                            <constraint firstItem="Lbl-Sp-Nm1" firstAttribute="top" secondItem="Lmg-Sp-La1" secondAttribute="bottom" constant="18" id="a06-nm-tp"/>
+                            <constraint firstItem="Lbl-Sp-Tg1" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="a07-tg-cx"/>
+                            <constraint firstItem="Lbl-Sp-Tg1" firstAttribute="top" secondItem="Lbl-Sp-Nm1" secondAttribute="bottom" constant="6" id="a08-tg-tp"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -32,6 +52,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="LaunchImage" width="168" height="185"/>
+        <image name="LaunchMark" width="96" height="96"/>
     </resources>
 </document>
