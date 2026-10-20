@@ -12,7 +12,6 @@ import 'package:qingyun_todo/components/priority_picker.dart';
 import 'package:qingyun_todo/components/wide_button.dart';
 import 'package:qingyun_todo/logic/app_actions.dart';
 import 'package:qingyun_todo/logic/periodic_actions.dart';
-import 'package:qingyun_todo/models/interval_type.dart';
 import 'package:qingyun_todo/models/periodic.dart';
 import 'package:qingyun_todo/models/periodic_item.dart';
 import 'package:qingyun_todo/models/todo_priority.dart';
@@ -217,9 +216,6 @@ class _PeriodicItemEditPageState extends ConsumerState<PeriodicItemEditPage> {
         ? 0
         : (ref.watch(periodicItemInstanceCountProvider(item!.id!)).valueOrNull ??
             0);
-    final shortCycleRisk =
-        (rule.type == IntervalType.month || rule.type == IntervalType.year) &&
-            dayOffset >= 28;
 
     return _shell(
       showSave: true,
@@ -320,10 +316,13 @@ class _PeriodicItemEditPageState extends ConsumerState<PeriodicItemEditPage> {
                   label: '优先级',
                   child: PriorityPicker(
                     value: _priority,
-                    onChanged: (value) => setState(() {
-                      _priority = value;
-                      _dirty = true;
-                    }),
+                    onChanged: (value) {
+                      if (value == _priority) return;
+                      setState(() {
+                        _priority = value;
+                        _dirty = true;
+                      });
+                    },
                   ),
                 ),
               ],
@@ -337,27 +336,23 @@ class _PeriodicItemEditPageState extends ConsumerState<PeriodicItemEditPage> {
                   child: AccentColorPicker(
                     value: _accentColorHex,
                     priority: _priority,
-                    onChanged: (hex) => setState(() {
-                      _accentColorHex = hex;
-                      _dirty = true;
-                    }),
+                    onChanged: (hex) {
+                      if (hex == _accentColorHex) return;
+                      setState(() {
+                        _accentColorHex = hex;
+                        _dirty = true;
+                      });
+                    },
                   ),
                 ),
               ],
             ),
-            if (shortCycleRisk) ...<Widget>[
-              const SizedBox(height: 16),
-              const InfoBanner(
-                text: '该事项安排在较靠后的天序，遇到较短的月份 / 年份时会被跳过。',
-                color: Color(0xFFFF9500),
-                icon: CupertinoIcons.exclamationmark_triangle,
-              ),
-            ],
             if (generatedCount > 0) ...<Widget>[
               const SizedBox(height: 16),
               InfoBanner(
-                text: '该事项已生成过 $generatedCount 条待办；修改模板只影响之后生成的，'
-                    '已生成的待办保持不变（Q8）。',
+                text: '该事项已生成过 $generatedCount 条待办。修改标题 / 备注 / 优先级 / '
+                    '色带只影响之后生成的待办；修改「第几天 / 提醒时间」会按新值重排'
+                    '该事项的未完成待办（已完成的不变）。',
                 color: const Color(0xFF007AFF),
               ),
             ],
@@ -406,6 +401,7 @@ class _PeriodicItemEditPageState extends ConsumerState<PeriodicItemEditPage> {
       ),
     );
     if (picked == null || !mounted) return;
+    if (picked == _dayOffset) return;
     setState(() {
       _dayOffset = picked;
       _dirty = true;
@@ -415,8 +411,10 @@ class _PeriodicItemEditPageState extends ConsumerState<PeriodicItemEditPage> {
   Future<void> _pickTime() async {
     final result = await pickTime(context, initial: _remindTime);
     if (result == null || !mounted) return;
+    final next = result.cleared ? null : result.time;
+    if (next == _remindTime) return;
     setState(() {
-      _remindTime = result.cleared ? null : result.time;
+      _remindTime = next;
       _dirty = true;
     });
   }

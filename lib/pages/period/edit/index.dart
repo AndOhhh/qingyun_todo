@@ -284,14 +284,18 @@ class _PeriodicEditPageState extends ConsumerState<PeriodicEditPage> {
                         _PresetChip(
                           label: preset.label,
                           selected: _isSelected(preset),
-                          onTap: () => setState(() {
-                            _customDays = preset.customDays;
-                            _type = preset.type;
-                            _value = preset.customDays
-                                ? (int.tryParse(_daysController.text.trim()) ?? 3)
-                                : preset.value;
-                            _dirty = true;
-                          }),
+                          onTap: () {
+                            if (_isSelected(preset)) return;
+                            setState(() {
+                              _customDays = preset.customDays;
+                              _type = preset.type;
+                              _value = preset.customDays
+                                  ? (int.tryParse(_daysController.text.trim()) ??
+                                      3)
+                                  : preset.value;
+                              _dirty = true;
+                            });
+                          },
                         ),
                     ],
                   ),
@@ -410,10 +414,10 @@ class _PeriodicEditPageState extends ConsumerState<PeriodicEditPage> {
             ),
             if (periodic != null) ...<Widget>[
               const SizedBox(height: 18),
-              // Q8 / C2-4：修改规则不追溯已生成实例
+              // Q8 / C2-4 / N14：日期类规则变更会重建未完成计划
               const InfoBanner(
-                text: '已生成的待办日期不会改变，新规则仅影响后续轮次；'
-                    '缩短周期时若有事项越界，会阻止保存并列出冲突项。',
+                text: '已完成的历史记录不会改变；修改起始日或间隔后，未完成的待办会按'
+                    '新规则从今天所在轮重新安排。缩短周期时若有事项越界，会阻止保存并列出冲突项。',
                 color: Color(0xFF007AFF),
                 icon: CupertinoIcons.clock,
               ),
@@ -476,8 +480,10 @@ class _PeriodicEditPageState extends ConsumerState<PeriodicEditPage> {
   Future<void> _pickStartDate() async {
     final picked = await pickDate(context, initial: _startDate);
     if (picked == null || !mounted) return;
+    final next = DateUtil.dateOnly(picked);
+    if (next == _startDate) return;
     setState(() {
-      _startDate = DateUtil.dateOnly(picked);
+      _startDate = next;
       _dirty = true;
     });
   }
@@ -490,8 +496,10 @@ class _PeriodicEditPageState extends ConsumerState<PeriodicEditPage> {
       title: '终止日期',
     );
     if (picked == null || !mounted) return;
+    final next = DateUtil.dateOnly(picked);
+    if (next == _endDate) return;
     setState(() {
-      _endDate = DateUtil.dateOnly(picked);
+      _endDate = next;
       _dirty = true;
     });
   }

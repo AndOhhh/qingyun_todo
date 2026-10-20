@@ -288,10 +288,13 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
                   label: '优先级',
                   child: PriorityPicker(
                     value: _priority,
-                    onChanged: (value) => setState(() {
-                      _priority = value;
-                      _dirty = true;
-                    }),
+                    onChanged: (value) {
+                      if (value == _priority) return;
+                      setState(() {
+                        _priority = value;
+                        _dirty = true;
+                      });
+                    },
                   ),
                 ),
               ],
@@ -305,10 +308,13 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
                   child: AccentColorPicker(
                     value: _accentColorHex,
                     priority: _priority,
-                    onChanged: (hex) => setState(() {
-                      _accentColorHex = hex;
-                      _dirty = true;
-                    }),
+                    onChanged: (hex) {
+                      if (hex == _accentColorHex) return;
+                      setState(() {
+                        _accentColorHex = hex;
+                        _dirty = true;
+                      });
+                    },
                   ),
                 ),
               ],
@@ -363,8 +369,11 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
   Future<void> _pickDate() async {
     final picked = await pickDate(context, initial: _remindDate);
     if (picked == null || !mounted) return;
+    final next = DateUtil.dateOnly(picked);
+    // 选了原值不算「改过」：避免返回时白问一次「放弃编辑？」（N25）
+    if (next == _remindDate) return;
     setState(() {
-      _remindDate = DateUtil.dateOnly(picked);
+      _remindDate = next;
       _dirty = true;
     });
   }
@@ -375,8 +384,10 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
       initial: _remindTime ?? _pickerSeedTime,
     );
     if (result == null || !mounted) return;
+    final next = result.cleared ? null : result.time;
+    if (next == _remindTime) return;
     setState(() {
-      _remindTime = result.cleared ? null : result.time;
+      _remindTime = next;
       _dirty = true;
     });
   }

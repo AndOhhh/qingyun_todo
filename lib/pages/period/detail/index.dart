@@ -142,8 +142,9 @@ class PeriodicDetailPage extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
         ],
-        // 轮长度可能长达 365 天（每年），此时只展示已有事项的天，另给一个总入口
-        if (detail.dayCount > 31)
+        // 轮长度较长（自定义 N 天 / 每月 / 每年）时只展示已安排事项的天，
+        // 另给一个总入口（N25）
+        if (detail.dayCount > 7)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: CupertinoButton.filled(
@@ -182,11 +183,13 @@ class PeriodicDetailPage extends ConsumerWidget {
     );
   }
 
-  /// 需要展示的天序：轮长度 <= 31 天时全展示（含空白天），
-  /// 否则只展示已安排事项的天，避免「每年」渲染 365 个分组。
+  /// 需要展示的天序：
+  /// - 轮长度 ≤ 7 天（每天 / 每周）：全展示（含空白天，方便按天添加）；
+  /// - 更长的轮（自定义 N 天 / 每月 / 每年）：只展示已安排事项的天 + 一个「添加事项」
+  ///   总入口，避免「每月」渲染 28 个「这一天还没有事项」空块（N25）。
   List<int> _visibleDays(PeriodicDetail detail) {
     final days = <int>{};
-    if (detail.dayCount <= 31) {
+    if (detail.dayCount <= 7) {
       days.addAll(List<int>.generate(detail.dayCount, (i) => i));
     }
     days.addAll(detail.itemsByDay.keys);

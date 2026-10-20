@@ -35,6 +35,9 @@ class NotificationService {
   /// 补发窗口：到期后多久内重新打开 App 仍会补发通知
   static const Duration kCatchUpWindow = Duration(hours: 24);
 
+  /// iOS / macOS 的待发通知上限：系统只保留最近 64 条，留 4 条余量（N24）
+  static const int kIOSMaxScheduled = 60;
+
   bool _available = false;
 
   /// 通知能力是否可用（权限/平台/初始化任一失败则为 false）
@@ -44,6 +47,16 @@ class NotificationService {
 
   /// 点击通知 → 打开对应待办（由路由层注入，见 `routes/index.dart`）
   static void Function(int taskId)? onOpenTask;
+
+  /// 冷启动（进程被杀后点通知）时的待打开待办 id，见 [takeLaunchTaskId]
+  int? _launchTaskId;
+
+  /// 取出并清空冷启动待打开的待办 id（由 `bootstrap` 消费，N24）
+  int? takeLaunchTaskId() {
+    final id = _launchTaskId;
+    _launchTaskId = null;
+    return id;
+  }
 
   // ------------------------------------------------------------ 初始化
 
@@ -60,7 +73,9 @@ class NotificationService {
     }
     try {
       const settings = InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // 必须用纯白单色 drawable：Android 8+ 会把小图标当 alpha 蒙版着色，
+        // 传 launcher mipmap 会在通知栏显示成白块（N24）。
+        android: AndroidInitializationSettings('ic_notification'),
         iOS: DarwinInitializationSettings(),
         macOS: DarwinInitializationSettings(),
       );
@@ -73,6 +88,18 @@ class NotificationService {
       );
       if (ok != true) return;
       _available = true;
+      // 冷启动补跳（N24）：进程被系统杀掉后点通知，插件不会回调
+      // `onDidReceiveNotificationResponse`，必须主动读一次启动详情；
+      // 读到后由 bootstrap / 路由层消费（takeLaunchTaskId）。
+      try {
+        final launch = await _plugin.getNotificationAppLaunchDetails();
+        if (launch?.didNotificationLaunchApp ?? false) {
+          _launchTaskId =
+              int.tryParse(launch?.notificationResponse?.payload ?? '');
+        }
+      } catch (error) {
+        debugPrint('[notify] 读取冷启动通知失败：$error');
+      }
       await _requestPermissions();
     } catch (error) {
       // 测试环境 / 未注册插件的平台会走到这里
@@ -114,7 +141,9 @@ class NotificationService {
       // 取消全部旧排期后重排：改时间 / 删除 / 完成都由此收敛，无需逐处维护
       await _plugin.cancelAll();
       // 逐条隔离失败：单条异常（如精确闹钟被拒）不能中断其余任务的排期
-      for (final task in plan.toSchedule) {
+      // iOS/macOS 系统最多保留 64 条待发通知，超出的会被静默丢弃：
+      // 这里只排最近 [kIOSMaxScheduled] 条（queryRemindable 已按时间升序）。
+      for (final task in _cappedForPlatform(plan.toSchedule)) {
         try {
           await _schedule(task);
         } catch (error) {
@@ -143,6 +172,15 @@ class NotificationService {
   }
 
   String? _lastError;
+
+  /// iOS / macOS 只排最近的 [kIOSMaxScheduled] 条（系统上限 64 条）；
+  /// 其它平台不限制。[tasks] 需已按提醒时间升序（`queryRemindable` 保证）。
+  static List<Todo> _cappedForPlatform(List<Todo> tasks) {
+    final limited = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+    if (!limited || tasks.length <= kIOSMaxScheduled) return tasks;
+    return tasks.take(kIOSMaxScheduled).toList(growable: false);
+  }
 
   /// 排期时捕获到 exact_alarms_not_permitted 的硬证据。
   /// 部分机型 `canScheduleExactNotifications()` 返回 null/true 不可信，

@@ -244,30 +244,38 @@ class _ScheduleViewState extends ConsumerState<ScheduleView> {
             onTap: () => setState(() => _dayCollapsed = !_dayCollapsed),
             child: Row(
               children: <Widget>[
-                Text(
-                  '${DateUtil.dateLabel(_selected)} · '
-                  '${_selected.month}月${_selected.day}日 '
-                  '${DateUtil.weekdayLabel(_selected)} · '
-                  '${LunarUtil.info(_selected).lunarFull}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1C1C1E),
+                // 1.3x 字号下这行会超出屏宽：首段用 Expanded + 省略号收敛，
+                // 保证「当日安排」与折叠箭头始终可见（N25）
+                Expanded(
+                  child: Text(
+                    '${DateUtil.dateLabel(_selected)} · '
+                    '${_selected.month}月${_selected.day}日 '
+                    '${DateUtil.weekdayLabel(_selected)} · '
+                    '${LunarUtil.info(_selected).lunarFull}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1C1C1E),
+                    ),
                   ),
                 ),
                 if (count != null && count > 0)
                   Text(
                     ' · $count 项',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
+                    style:
+                        const TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
                   ),
-                const Spacer(),
+                const SizedBox(width: 6),
                 const Text(
                   '当日安排',
                   style: TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
                 ),
                 const SizedBox(width: 4),
                 AnimatedRotation(
-                  turns: _dayCollapsed ? -0.5 : 0,
+                  // 收起 → 向下（可展开）；展开 → 向上（与「已完成」分组一致）
+                  turns: _dayCollapsed ? 0.0 : 0.5,
                   duration: const Duration(milliseconds: 220),
                   child: const Icon(
                     CupertinoIcons.chevron_down,

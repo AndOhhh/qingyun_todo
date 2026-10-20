@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:qingyun_todo/components/confirm_dialog.dart';
 import 'package:qingyun_todo/utils/app_exception.dart';
 
-/// 统一的操作失败提示：[ValidationException] 展示业务文案，其余展示原始错误。
+/// 统一的操作失败提示：[ValidationException] 展示业务文案，其余展示通用提示
+/// （原始异常只写日志，不把 SQL / 堆栈抛给用户，N25）。
 Future<void> showActionError(BuildContext context, Object error) {
-  final message = error is ValidationException
-      ? error.fullMessage
-      : '操作失败：$error';
+  final message =
+      error is ValidationException ? error.fullMessage : '操作没有完成，请稍后重试。';
+  if (error is! ValidationException) {
+    debugPrint('[action] $error');
+  }
   return showActionDialog(
     context,
     title: '出错了',

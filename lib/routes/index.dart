@@ -19,7 +19,7 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 Widget getRootWidget() {
   return MaterialApp(
     debugShowCheckedModeBanner: false,
-    title: '青云待办',
+    title: '轻云待办',
     navigatorKey: rootNavigatorKey,
     initialRoute: RouteConstants.mainPath,
     onGenerateRoute: onGenerateRoute,
@@ -39,11 +39,20 @@ Widget getRootWidget() {
 /// 命名路由解析：统一在此把 query 参数转成强类型入参
 /// 绑定「点击通知 → 打开对应待办编辑页」（在 ProviderScope 就绪后调用）
 void bindNotificationNavigation() {
-  NotificationService.onOpenTask = (taskId) {
-    rootNavigatorKey.currentState?.pushNamed(
-      RouteConstants.todoEditPath(id: taskId),
-    );
-  };
+  NotificationService.onOpenTask = openTodoById;
+}
+
+/// 按待办 id 打开编辑页；导航器尚未挂载时（冷启动极早期）等下一帧再试一次。
+void openTodoById(int taskId) {
+  final route = RouteConstants.todoEditPath(id: taskId);
+  final navigator = rootNavigatorKey.currentState;
+  if (navigator != null) {
+    navigator.pushNamed(route);
+    return;
+  }
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    rootNavigatorKey.currentState?.pushNamed(route);
+  });
 }
 
 Route<dynamic>? onGenerateRoute(RouteSettings settings) {

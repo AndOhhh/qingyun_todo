@@ -201,14 +201,18 @@ class ScheduleCalendar extends StatelessWidget {
                             // 选中日把农历小字收进实心圆内（参考图），
                             // 避免白字落在浅色背景上看不见
                             if (isSelected)
-                              Text(
-                                lunar.subLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.clip,
-                                style: TextStyle(
-                                  fontSize: 7.5,
-                                  height: 1.1,
-                                  color: Colors.white.withValues(alpha: 0.85),
+                              // 装饰性小字：不跟随系统字号放大，否则会撑破 34pt 圆
+                              MediaQuery.withClampedTextScaling(
+                                maxScaleFactor: 1.0,
+                                child: Text(
+                                  lunar.subLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.clip,
+                                  style: TextStyle(
+                                    fontSize: 7.5,
+                                    height: 1.1,
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                  ),
                                 ),
                               ),
                           ],
@@ -218,14 +222,21 @@ class ScheduleCalendar extends StatelessWidget {
                   ),
                   if (lunar.cornerTag != null)
                     Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Text(
-                        lunar.cornerTag!,
-                        style: TextStyle(
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w700,
-                          color: lunar.isWork ? const Color(0xFFFF9500) : _kBlue,
+                      // 角标压在数字圆右上角外沿，1.3x 字号下不遮挡日期数字（N25）
+                      right: -1,
+                      top: -1,
+                      child: MediaQuery.withClampedTextScaling(
+                        maxScaleFactor: 1.0,
+                        child: Text(
+                          lunar.cornerTag!,
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            height: 1.1,
+                            fontWeight: FontWeight.w700,
+                            color: lunar.isWork
+                                ? const Color(0xFFFF9500)
+                                : _kBlue,
+                          ),
                         ),
                       ),
                     ),
@@ -238,18 +249,22 @@ class ScheduleCalendar extends StatelessWidget {
               SizedBox(
                 height: 12,
                 child: Center(
-                  child: Text(
-                    lunar.subLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                    style: TextStyle(
-                      fontSize: 8.5,
-                      height: 1.1,
-                      color: isOutsideMonth
-                          ? _kDim
-                          : lunar.isFestival
-                              ? const Color(0xFF636366)
-                              : const Color(0xFFAEAEB2),
+                  child: MediaQuery.withClampedTextScaling(
+                    // 农历小字是辅助信息：固定 8.5pt，避免放大后互相挤压
+                    maxScaleFactor: 1.0,
+                    child: Text(
+                      lunar.subLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        height: 1.1,
+                        color: isOutsideMonth
+                            ? _kDim
+                            : lunar.isFestival
+                                ? const Color(0xFF636366)
+                                : const Color(0xFFAEAEB2),
+                      ),
                     ),
                   ),
                 ),

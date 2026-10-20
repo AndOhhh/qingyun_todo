@@ -39,8 +39,10 @@ class SectionHeader extends StatelessWidget {
           if (tap != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
+              // 收起 → 向下（⌄）；展开 → 向上（⌃）。chevron_down 旋转半圈即向上，
+              // 方向写反会让「收起」看起来像「展开」（N23）。
               child: AnimatedRotation(
-                turns: (expanded ?? false) ? 0.0 : -0.5,
+                turns: (expanded ?? false) ? 0.5 : 0.0,
                 duration: const Duration(milliseconds: 220),
                 child: const Icon(
                   CupertinoIcons.chevron_down,

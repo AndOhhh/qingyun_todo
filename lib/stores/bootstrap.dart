@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:qingyun_todo/services/notification_service.dart';
 import 'package:qingyun_todo/stores/db_providers.dart';
 import 'package:qingyun_todo/routes/index.dart';
 import 'package:qingyun_todo/stores/invalidation.dart';
@@ -33,6 +34,9 @@ Future<void> bootstrapApp(WidgetRef ref) async {
     await notify.init();
     await notify.reconcile();
     await notify.startForegroundWatch();
+    // 冷启动点通知进入：init 已读到启动详情，此时首帧已过、导航器可用（N24）
+    final launchTaskId = notify.takeLaunchTaskId();
+    if (launchTaskId != null) NotificationService.onOpenTask?.call(launchTaskId);
   } catch (error, stack) {
     debugPrint('[bootstrap] 周期实例生成失败，将在下次触发时重试：$error');
     debugPrintStack(stackTrace: stack);
