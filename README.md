@@ -4,7 +4,10 @@
 
 核心特色是**自定义天数周期**——一个周期可以是 N 天（也可以是周 / 月 / 年），周期内每一天可以安排不同的事项；到点由系统闹钟发本地提醒。
 
-> 当前版本：`1.0.0+1`（开发版）· 核对基线 `a2a63d8` · `flutter analyze` 零告警 · **194 个测试**全绿
+> **v1.0.0（2026-10-21）** · `flutter analyze` 零告警 · **194 个测试**全绿
+
+[**⬇️ 下载 Android APK**](https://github.com/AndOhhh/qingyun_todo/releases/download/v1.0.0/qingyun_todo-1.0.0.apk) ｜ 约 61 MB ｜ Android 7.0+（minSdk 24）
+> APK 使用**开发签名**构建，可直接安装体验；上架应用商店需另配正式签名与包名，见文末「发布清单」。
 
 ---
 
@@ -146,7 +149,32 @@ flutter build apk --release # 或 --split-per-abi / appbundle
 
 ---
 
-## 📦 发布清单（1.0 前必须完成）
+## 📝 版本记录
+
+### v1.0.0 · 2026-10-21
+
+首个公开版本。
+
+**功能**
+- **待办**：逾期/今天/明天/后续/已完成五分组；优先级 + 色带颜色；完成与删除严格分离（删除二次确认 + 5 秒撤销）；周期实例三级删除
+- **周期**：每天 / 每 2 天 / 自定义天数 / 每周 / 每 2 周 / 每月 / 每年；一轮一期；规则变更保留已完成、重建未完成；暂停与终止；删除后保留已完成历史
+- **日程**：自绘月历（农历 / 节气 / 法定假日 / 调休）、相邻月补位跳转、单周折叠、当日 0–24h 时间轴、当月概览
+- **统计**：今日完成率、连续打卡（里程碑）、本周点阵、逾期 / 待处理 / 周期完成率；完成趋势、优先级分布、星期分布、月历热力
+- **通知**：系统级排期、24h 补发窗口、前台兜底巡检、国产 ROM 诊断引导页、点击通知直达对应待办（含冷启动）
+- **品牌**：应用图标（蓝渐变 + 白云 + 琥珀对勾）与配套启动页
+
+**发布前修复**
+- 取消完成后重启会静默删除下一轮待办（数据丢失）
+- 周期「当前轮」存在两套口径（周期页 vs 待办页/生成引擎）
+- 逾期实例的「删除未来待办」会删错范围
+- 「已完成」折叠箭头方向、1.3x 字号布局、长周期详情页大量空白
+- 通知冷启动不跳转、Android 通知栏图标白块、iOS 超出 64 条被丢弃
+
+**已知问题**：见上方「已知限制」。
+
+---
+
+## 📦 发布清单（上架应用商店前完成）
 
 - [ ] `android/app/build.gradle.kts`：`applicationId` / `namespace` 换成自有域名（现在 `com.example.qingyun_todo`，商店不接受）
 - [ ] 配置 release keystore 与 `signingConfigs.release`（现在 release 仍用 debug 签名）
@@ -155,8 +183,8 @@ flutter build apk --release # 或 --split-per-abi / appbundle
 - [x] **应用图标**：蓝色渐变 + 白云 + 琥珀对勾（iOS 全尺寸 / Android 自适应 + 旧版 PNG）
 - [x] **启动页**：品牌底色 `#F2F2F7` + 应用图标（Android 12+ 系统 SplashScreen / iOS LaunchScreen）
 - [ ] 隐私政策页面 / URL（即使不收集任何数据也需要）
-- [ ] 版本号：`pubspec.yaml` 的 `version: 1.0.0+1`
-- [ ] 构建产物：优先 AAB；国内渠道用 `flutter build apk --release --split-per-abi`（universal APK 约 61MB）
+- [x] 版本号：`1.0.0 (build 1)`
+- [x] v1.0.0 APK 已构建并随 GitHub Release 发布（universal，开发签名，约 61MB）；商店上架改用 AAB / `--split-per-abi`
 - [ ] 真机回归：Android（含国产 ROM 通知）+ iOS（通知 / 冷启动点通知）
 
 ---
