@@ -19,7 +19,7 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 Widget getRootWidget() {
   return MaterialApp(
     debugShowCheckedModeBanner: false,
-    title: '轻云待办',
+    title: '轻云',
     navigatorKey: rootNavigatorKey,
     initialRoute: RouteConstants.mainPath,
     onGenerateRoute: onGenerateRoute,

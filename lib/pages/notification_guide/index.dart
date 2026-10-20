@@ -24,42 +24,42 @@ class GuideStep {
 /// 因此每步只写到关键开关名，用户即使层级不同也能按名称搜到。
 List<GuideStep> buildGuideSteps(DeviceBrand brand) => switch (brand) {
       DeviceBrand.coloros => const <GuideStep>[
-          GuideStep('允许自启动', '设置 → 应用 → 应用管理 → 轻云待办 → 打开「允许自启动」'),
+          GuideStep('允许自启动', '设置 → 应用 → 应用管理 → 轻云 → 打开「允许自启动」'),
           GuideStep('允许完全后台行为', '同页「耗电管理」→ 选择「允许完全后台行为」'),
           GuideStep('锁定后台卡片', '多任务界面下拉卡片（或点卡片右上 ⋮）→ 锁定，避免划掉时被系统强停'),
         ],
       DeviceBrand.miui => const <GuideStep>[
-          GuideStep('打开自启动', '设置 → 应用设置 → 应用管理 → 轻云待办 → 打开「自启动」'),
+          GuideStep('打开自启动', '设置 → 应用设置 → 应用管理 → 轻云 → 打开「自启动」'),
           GuideStep('省电策略改为「无限制」', '同页 → 省电策略 → 无限制'),
           GuideStep('锁定后台卡片', '多任务界面下拉卡片 → 锁定'),
         ],
       DeviceBrand.harmony => const <GuideStep>[
-          GuideStep('关闭「自动管理」', '设置 → 应用 → 应用启动管理 → 轻云待办 → 关闭「自动管理」'),
+          GuideStep('关闭「自动管理」', '设置 → 应用 → 应用启动管理 → 轻云 → 关闭「自动管理」'),
           GuideStep('三项全部手动允许', '弹出的面板中勾选「自启动」「关联启动」「后台活动」'),
           GuideStep('锁定后台卡片', '多任务界面下拉卡片 → 锁定'),
         ],
       DeviceBrand.vivo => const <GuideStep>[
-          GuideStep('允许后台高耗电', '设置 → 电池 → 后台耗电管理 → 轻云待办 → 允许后台高耗电'),
-          GuideStep('允许自启动', 'i 管家 → 应用管理 → 自启动管理 → 轻云待办 → 打开'),
+          GuideStep('允许后台高耗电', '设置 → 电池 → 后台耗电管理 → 轻云 → 允许后台高耗电'),
+          GuideStep('允许自启动', 'i 管家 → 应用管理 → 自启动管理 → 轻云 → 打开'),
           GuideStep('锁定后台卡片', '多任务界面下拉卡片 → 锁定'),
         ],
       DeviceBrand.samsung => const <GuideStep>[
-          GuideStep('电池改为「不受限制」', '设置 → 应用 → 轻云待办 → 电池 → 不受限制'),
-          GuideStep('移出「自动关闭的应用」', '设置 → 电池 → 后台使用限制 → 从列表中移除轻云待办'),
+          GuideStep('电池改为「不受限制」', '设置 → 应用 → 轻云 → 电池 → 不受限制'),
+          GuideStep('移出「自动关闭的应用」', '设置 → 电池 → 后台使用限制 → 从列表中移除轻云'),
         ],
       DeviceBrand.meizu => const <GuideStep>[
-          GuideStep('允许后台运行', '手机管家 → 权限管理 → 后台管理 → 轻云待办 → 允许后台运行'),
-          GuideStep('允许自启动', '手机管家 → 权限管理 → 自启动管理 → 轻云待办 → 打开'),
+          GuideStep('允许后台运行', '手机管家 → 权限管理 → 后台管理 → 轻云 → 允许后台运行'),
+          GuideStep('允许自启动', '手机管家 → 权限管理 → 自启动管理 → 轻云 → 打开'),
           GuideStep('锁定后台卡片', '多任务界面下拉卡片 → 锁定'),
         ],
       DeviceBrand.stock => const <GuideStep>[
-          GuideStep('关闭电池优化', '设置 → 应用 → 轻云待办 → 电池 → 不受限制（关闭电池优化）'),
+          GuideStep('关闭电池优化', '设置 → 应用 → 轻云 → 电池 → 不受限制（关闭电池优化）'),
           GuideStep('允许后台运行', '若系统提供「自启动 / 后台限制」开关，一并允许'),
         ],
       DeviceBrand.ios => const <GuideStep>[
-          GuideStep('允许通知', '设置 → 通知 → 轻云待办 → 打开「允许通知」'),
+          GuideStep('允许通知', '设置 → 通知 → 轻云 → 打开「允许通知」'),
           GuideStep('打开横幅与声音', '同页打开「横幅」「声音」，建议一并开启「时效性通知」'),
-          GuideStep('检查专注模式', '专注模式（勿扰）会静默提醒，请把轻云待办加入允许列表'),
+          GuideStep('检查专注模式', '专注模式（勿扰）会静默提醒，请把轻云加入允许列表'),
         ],
     };
 

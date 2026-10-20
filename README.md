@@ -1,6 +1,6 @@
-# 轻云待办 · Qingyun Todo
+# 轻云 · Qingyun Todo
 
-一个**纯本地**的 Flutter 待办应用：iOS 风格的界面、SQLite 存储、无账号、无服务端、无网络权限。
+一个**纯本地**的 Flutter 待办软件（Todo app）：iOS 风格的界面、SQLite 存储、无账号、无服务端、无网络权限。
 
 核心特色是**自定义天数周期**——一个周期可以是 N 天（也可以是周 / 月 / 年），周期内每一天可以安排不同的事项；到点由系统闹钟发本地提醒。
 
@@ -151,7 +151,7 @@ flutter build apk --release # 或 --split-per-abi / appbundle
 - [ ] `android/app/build.gradle.kts`：`applicationId` / `namespace` 换成自有域名（现在 `com.example.qingyun_todo`，商店不接受）
 - [ ] 配置 release keystore 与 `signingConfigs.release`（现在 release 仍用 debug 签名）
 - [ ] iOS `PRODUCT_BUNDLE_IDENTIFIER` 换成自有域名（现在 `com.example.qingyunTodo`）
-- [x] 应用名称：**轻云待办**（`android:label` / iOS `CFBundleDisplayName` / `MaterialApp.title` / 应用内引导文案）
+- [x] 应用名称：**轻云**（`android:label` / iOS `CFBundleDisplayName` / `MaterialApp.title` / 应用内引导文案）
 - [ ] 应用图标与启动图
 - [ ] 隐私政策页面 / URL（即使不收集任何数据也需要）
 - [ ] 版本号：`pubspec.yaml` 的 `version: 1.0.0+1`
@@ -164,7 +164,7 @@ flutter build apk --release # 或 --split-per-abi / appbundle
 
 | 文档 | 内容 |
 | :-- | :-- |
-| [docs/README.md](docs/README.md) | 文档索引 + 阅读顺序 + 全局约定 + Q/N 决策登记 |
+| [docs/README.md](docs/文档汇总.md) | 文档索引 + 阅读顺序 + 全局约定 + Q/N 决策登记 |
 | [01 需求规格](docs/01-需求规格.md) | 功能需求与周期规则 |
 | [02 数据库设计](docs/02-数据库设计.md) | schema v2.2 DDL、索引、变更记录 |
 | [03 架构与现状](docs/03-架构与现状.md) | 代码清单、分层、UI 规范、实现状态、R/N 决策 |
