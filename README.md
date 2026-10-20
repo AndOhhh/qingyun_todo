@@ -164,7 +164,7 @@ flutter build apk --release # 或 --split-per-abi / appbundle
 
 | 文档 | 内容 |
 | :-- | :-- |
-| [docs/README.md](docs/文档汇总.md) | 文档索引 + 阅读顺序 + 全局约定 + Q/N 决策登记 |
+| [docs/文档汇总.md](docs/文档汇总.md) | 文档索引 + 阅读顺序 + 全局约定 + Q/N 决策登记 |
 | [01 需求规格](docs/01-需求规格.md) | 功能需求与周期规则 |
 | [02 数据库设计](docs/02-数据库设计.md) | schema v2.2 DDL、索引、变更记录 |
 | [03 架构与现状](docs/03-架构与现状.md) | 代码清单、分层、UI 规范、实现状态、R/N 决策 |
