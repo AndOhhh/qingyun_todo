@@ -102,7 +102,16 @@ void main() {
     expect(find.text('今天的事'), findsOneWidget);
     expect(find.text('另一天的事'), findsNothing);
 
-    await tester.tap(find.text('$otherDayNumber'));
+    // 只点月历里的日期格子：当日时间轴里也有 "18"（0/6/12/18/24 小时刻度），
+    // 直接用 find.text 会在部分日期（如 21 号 → 18 号）命中两个控件
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(ScheduleCalendar),
+            matching: find.text('$otherDayNumber'),
+          )
+          .first,
+    );
     await settle(tester);
     expect(find.text('另一天的事'), findsOneWidget);
     expect(find.text('今天的事'), findsNothing);
